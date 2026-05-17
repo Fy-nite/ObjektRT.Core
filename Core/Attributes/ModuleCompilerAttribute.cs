@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 namespace ObjectIR.Core.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.All, Inherited = false, AllowMultiple = true)]
-    abstract class ModulenameAttribute : System.Attribute
+    abstract class ModuleCompilerAttribute : System.Attribute
     {
         public string Name { get; set; }
-        public ModuleNameAttribute(string name)
+        public List<string> CompilerArguments;
+        public ModuleCompilerAttribute(string CompilerName, List<string> CompilerArgs)
         {
-            this.Name = name;
+            this.Name = CompilerName;
+            this.CompilerArguments = CompilerArgs; 
         }
         
        }

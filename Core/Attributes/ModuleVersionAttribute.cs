@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 namespace ObjectIR.Core.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.All, Inherited = false, AllowMultiple = true)]
-    abstract class ModulenameAttribute : System.Attribute
+    abstract class ModuleVersionAttribute : System.Attribute
     {
         public string Name { get; set; }
-        public ModuleNameAttribute(string name)
+        public ModuleVersionAttribute(string name)
         {
             this.Name = name;
         }
