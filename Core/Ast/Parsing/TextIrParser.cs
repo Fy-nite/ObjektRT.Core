@@ -610,8 +610,11 @@ public static class TextIrParser
         var (methodRef, args) = ParseTargetAndArgs(left);
         var returnTypeNode = new TypeRef(right.ToString());
 
-        // Update the return type on the method reference as well
-        var updatedMethodRef = methodRef with { ReturnType = returnTypeNode };
+        // Update the return type and parameter types on the method reference
+        var updatedMethodRef = methodRef with { 
+            ReturnType = returnTypeNode,
+            ParameterTypes = args.ToList()
+        };
 
         return new CallInstruction(updatedMethodRef, args, isVirtual);
     }
@@ -641,8 +644,9 @@ public static class TextIrParser
 
         var argsSpan = ctorSpan.Slice(openParenIndex + 1, closeParenIndex - (openParenIndex + 1));
         var args = ParseTypeList(argsSpan);
-        var method = new MethodReference(new TypeRef(typeName.ToString()), "constructor", TypeRef.Void, new List<TypeRef>());
-        return new NewObjInstruction(new TypeRef(typeName.ToString()), method, args.ToList());
+        var argList = args.ToList();
+        var method = new MethodReference(new TypeRef(typeName.ToString()), "constructor", TypeRef.Void, argList);
+        return new NewObjInstruction(new TypeRef(typeName.ToString()), method, argList);
     }
 
     private static (MethodReference Method, IReadOnlyList<TypeRef> Args) ParseTargetAndArgs(ReadOnlySpan<char> text)
