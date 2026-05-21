@@ -168,14 +168,7 @@ public sealed record MethodNode(string Name) : AstNode
         ReturnType = returnType;
         IsStatic = isStatic;
         NativeImpl = nativeImpl;
-    }
-
-    public MethodNode(string Name, List<ParameterNode> printlnParams, TypeRef @void, bool v, NativeMethod printlnNative) : this(Name)
-    {
-        this.Params = printlnParams;
-        this.@void = @void;
-        this.v = v;
-        this.Native = printlnNative;
+        // Console.WriteLine($"[METHODNODE] Created native method: {name}, NativeImpl is {(NativeImpl != null ? "SET" : "NULL")}");
     }
 }
 
