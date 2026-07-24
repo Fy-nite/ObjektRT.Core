@@ -3,6 +3,8 @@ namespace ObjectIR.Core.Builder;
 using System;
 using System.Collections.Generic;
 using ObjectIR.Core.AST;
+using ObjectIR.Core.Ast;
+using OpCode = ObjectIR.Core.Ast.OpCode;
 
 /// <summary>
 /// Fluent API for building IR modules using AST nodes
@@ -342,7 +344,7 @@ public sealed class InstructionBuilder
         return this;
     }
 
-    private InstructionBuilder Emit(string opCode, string? operand = null)
+    private InstructionBuilder Emit(OpCode opCode, string? operand = null)
     {
         var instruction = new SimpleInstruction(opCode, operand) { Location = _currentLocation };
         _statements.Add(new InstructionStatement(instruction) { Location = _currentLocation });
@@ -350,10 +352,10 @@ public sealed class InstructionBuilder
     }
 
     // Load/Store
-    public InstructionBuilder Ldarg(int index) => Emit("ldarg", index.ToString());
-    public InstructionBuilder Starg(int index) => Emit("starg", index.ToString());
-    public InstructionBuilder Ldloc(string name) => Emit("ldloc", name);
-    public InstructionBuilder Stloc(string name) => Emit("stloc", name);
+    public InstructionBuilder Ldarg(int index) => Emit(OpCode.Ldarg, index.ToString());
+    public InstructionBuilder Starg(int index) => Emit(OpCode.Starg, index.ToString());
+    public InstructionBuilder Ldloc(string name) => Emit(OpCode.Ldloc, name);
+    public InstructionBuilder Stloc(string name) => Emit(OpCode.Stloc, name);
     
     public InstructionBuilder Local(string name, TypeRef type)
     {
@@ -363,48 +365,48 @@ public sealed class InstructionBuilder
     
     public InstructionBuilder Ldfld(FieldReference field)
     {
-        var instr = new SimpleInstruction("ldfld", $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
+        var instr = new SimpleInstruction(OpCode.Ldfld, $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
         _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
         return this;
     }
 
     public InstructionBuilder Ldsfld(FieldReference field)
     {
-        var instr = new SimpleInstruction("ldsfld", $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
+        var instr = new SimpleInstruction(OpCode.Ldsfld, $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
         _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
         return this;
     }
 
-    public InstructionBuilder LdcI4(int value) => Emit("ldc.i4", value.ToString());
-    public InstructionBuilder LdcR4(float value) => Emit("ldc.r4", value.ToString());
-    public InstructionBuilder Ldstr(string value) => Emit("ldstr", value);
-    public InstructionBuilder Ldnull() => Emit("ldnull");
+    public InstructionBuilder LdcI4(int value) => Emit(OpCode.LdcI4, value.ToString());
+    public InstructionBuilder LdcR4(float value) => Emit(OpCode.LdcR4, value.ToString());
+    public InstructionBuilder Ldstr(string value) => Emit(OpCode.Ldstr, value);
+    public InstructionBuilder Ldnull() => Emit(OpCode.Ldnull);
 
     public InstructionBuilder Stfld(FieldReference field)
     {
-        var instr = new SimpleInstruction("stfld", $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
+        var instr = new SimpleInstruction(OpCode.Stfld, $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
         _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
         return this;
     }
 
     // Arithmetic
-    public InstructionBuilder Add() => Emit("add");
-    public InstructionBuilder Sub() => Emit("sub");
-    public InstructionBuilder Mul() => Emit("mul");
-    public InstructionBuilder Div() => Emit("div");
-    public InstructionBuilder Rem() => Emit("rem");
-    public InstructionBuilder Neg() => Emit("neg");
+    public InstructionBuilder Add() => Emit(OpCode.Add);
+    public InstructionBuilder Sub() => Emit(OpCode.Sub);
+    public InstructionBuilder Mul() => Emit(OpCode.Mul);
+    public InstructionBuilder Div() => Emit(OpCode.Div);
+    public InstructionBuilder Rem() => Emit(OpCode.Rem);
+    public InstructionBuilder Neg() => Emit(OpCode.Neg);
 
     // Logical
-    public InstructionBuilder And() => Emit("and");
-    public InstructionBuilder Or() => Emit("or");
-    public InstructionBuilder Xor() => Emit("xor");
-    public InstructionBuilder Not() => Emit("not");
+    public InstructionBuilder And() => Emit(OpCode.And);
+    public InstructionBuilder Or() => Emit(OpCode.Or);
+    public InstructionBuilder Xor() => Emit(OpCode.Xor);
+    public InstructionBuilder Not() => Emit(OpCode.Not);
 
     // Comparison
-    public InstructionBuilder Ceq() => Emit("ceq");
-    public InstructionBuilder Cgt() => Emit("cgt");
-    public InstructionBuilder Clt() => Emit("clt");
+    public InstructionBuilder Ceq() => Emit(OpCode.Ceq);
+    public InstructionBuilder Cgt() => Emit(OpCode.Cgt);
+    public InstructionBuilder Clt() => Emit(OpCode.Clt);
     
     public InstructionBuilder Cne() => Ceq().Not();
     public InstructionBuilder Cge() => Clt().Not();
@@ -426,8 +428,8 @@ public sealed class InstructionBuilder
     }
 
     // Object operations
-    public InstructionBuilder Ldelem() => Emit("ldelem");
-    public InstructionBuilder Stelem() => Emit("stelem");
+    public InstructionBuilder Ldelem() => Emit(OpCode.Ldelem);
+    public InstructionBuilder Stelem() => Emit(OpCode.Stelem);
 
     public InstructionBuilder Newobj(TypeRef type, MethodReference? constructor = null)
     {
@@ -437,11 +439,11 @@ public sealed class InstructionBuilder
     }
 
     // Stack
-    public InstructionBuilder Dup() => Emit("dup");
-    public InstructionBuilder Pop() => Emit("pop");
+    public InstructionBuilder Dup() => Emit(OpCode.Dup);
+    public InstructionBuilder Pop() => Emit(OpCode.Pop);
 
     // Control flow
-    public InstructionBuilder Ret() => Emit("ret");
+    public InstructionBuilder Ret() => Emit(OpCode.Ret);
 
     public InstructionBuilder If(string condition, Action<InstructionBuilder> thenBlock, Action<InstructionBuilder>? elseBlock = null)
     {

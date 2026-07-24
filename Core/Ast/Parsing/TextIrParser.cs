@@ -1,4 +1,6 @@
 using ObjectIR.Core.AST;
+using ObjectIR.Core.Ast;
+using OpCode = ObjectIR.Core.Ast.OpCode;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -589,7 +591,7 @@ public static class TextIrParser
         var parts = line.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
         var opcode = parts[0];
         var operand = parts.Length > 1 ? parts[1].Trim() : null;
-        return new SimpleInstruction(opcode, operand);
+        return new SimpleInstruction(OpCodeConverter.Parse(opcode), operand);
     }
 
     private static CallInstruction ParseCallCore(ReadOnlySpan<char> span, bool isVirtual)

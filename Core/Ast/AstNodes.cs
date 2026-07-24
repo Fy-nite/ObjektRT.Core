@@ -228,7 +228,7 @@ public sealed record SwitchStatement(
 public abstract record Instruction : AstNode;
 
 public sealed record SimpleInstruction(
-    string OpCode,
+    global::ObjectIR.Core.Ast.OpCode OpCode,
     string? Operand = null
 ) : Instruction;
 
