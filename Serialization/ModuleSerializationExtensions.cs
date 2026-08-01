@@ -1,6 +1,6 @@
-namespace ObjectIR.Core.Serialization;
+namespace ObjektRT.Core.Serialization;
 
-using ObjectIR.Core.AST;
+using ObjektRT.Core.AST;
 
 /// <summary>
 /// Extension methods for serializing IR modules (using AST nodes)

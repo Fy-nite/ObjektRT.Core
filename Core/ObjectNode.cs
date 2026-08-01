@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ObjectIR.Core.Core
+namespace ObjektRT.Core
 {
     /// <summary>
     /// Canonical Type for All Objects Inside ObjectIR. 

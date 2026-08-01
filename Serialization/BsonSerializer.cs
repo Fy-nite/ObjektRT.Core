@@ -1,4 +1,4 @@
-namespace ObjectIR.Core.Serialization;
+namespace ObjektRT.Core.Serialization;
 
 using MongoDB.Bson;
 using System;

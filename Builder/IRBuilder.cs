@@ -1,10 +1,9 @@
-namespace ObjectIR.Core.Builder;
+namespace ObjektRT.Core.Builder;
 
 using System;
 using System.Collections.Generic;
-using ObjectIR.Core.AST;
-using ObjectIR.Core.Ast;
-using OpCode = ObjectIR.Core.Ast.OpCode;
+using ObjektRT.Core.AST;
+using OpCode = ObjektRT.Core.AST.OpCode;
 
 /// <summary>
 /// Fluent API for building IR modules using AST nodes

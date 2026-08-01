@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-namespace ObjectIR.Core
+namespace ObjektRT.Core
 {
     public interface IValue
     {
@@ -38,7 +38,7 @@ namespace ObjectIR.Core
         /// <returns>A new Value<string> containing the string representation of the input value's data.</returns>
         public static Value<string> ToString(Value<T> value)
         {
-            return new Value<string>(value.Data.ToString());
+            return new Value<string>(value.Data?.ToString() ?? string.Empty);
         }
        /// <summary>
        /// Determines whether the specified object is equal to the current Value<T> instance.
@@ -52,7 +52,7 @@ namespace ObjectIR.Core
         {
             if (obj is Value<T> other)
             {
-                return Data.Equals(other.Data);
+                return EqualityComparer<T>.Default.Equals(Data, other.Data);
             }
             return false;
         }
@@ -64,7 +64,7 @@ namespace ObjectIR.Core
        /// <returns>A 32-bit signed integer hash code representing the current object.</returns>
         public override int GetHashCode()
         {
-            return Data.GetHashCode();
+            return Data is null ? 0 : Data.GetHashCode();
         }
         /// <summary>
         /// Returns a string that represents the value of the Data property.
@@ -72,7 +72,7 @@ namespace ObjectIR.Core
         /// <returns>A string representation of the Data property, or an empty string if Data is null.</returns>
         public override string ToString()
         {
-            return Data.ToString() ?? string.Empty;
+            return Data?.ToString() ?? string.Empty;
         }
     }
 }

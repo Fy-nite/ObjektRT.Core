@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>ObjektRT.Core</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>ObjectRT Contributors</Authors>
+    <Description>ObjektRT core: object-oriented intermediate representation library (wire model, AST, parsers, serialization, and Model&lt;-&gt;AST conversion). Formerly ObjectIR.Core.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RootNamespace>ObjektRT.Core</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net47'">
+    <DefineConstants>NET47;$(DefineConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JsonSchema.Net" Version="7.0.3" />
+    <PackageReference Include="MongoDB.Bson">
+      <Version>3.8.0</Version>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Compatibility\Net47Shims.cs" Condition="'$(TargetFramework)' != 'net47'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keep the test project out of the library's default compile globs. -->
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
+</Project>

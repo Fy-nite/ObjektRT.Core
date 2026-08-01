@@ -1,4 +1,4 @@
-namespace ObjectIR.Core.Serialization;
+namespace ObjektRT.Core.Serialization;
 
 using System;
 using System.Collections.Generic;

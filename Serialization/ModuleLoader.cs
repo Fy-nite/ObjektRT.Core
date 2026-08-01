@@ -1,7 +1,8 @@
-namespace ObjectIR.Core.Serialization;
+namespace ObjektRT.Core.Serialization;
 
-using ObjectIR.Core.AST;
-using ObjectIR.Core.Builder;
+using ObjektRT.Core.AST;
+using ObjektRT.Core.Parsing;
+using ObjektRT.Core.Builder;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -23,7 +24,7 @@ public sealed class ModuleLoader
     {
         // For now, we delegate to TextIrParser if available, or use our basic implementation
         // Since TextIrParser returns ModuleNode, it's perfect.
-        var module = ObjectIR.Core.AST.TextIrParser.ParseModule(text);
+        var module = TextIrParser.ParseModule(text);
         CacheModule(module);
         return module;
     }

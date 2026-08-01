@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using ObjectIR.Core.Ast;
 
-namespace ObjectIR.Core.AST;
+namespace ObjektRT.Core.AST;
 
 public sealed record SourceLocation(int Line, int Column, string? SourceLine = null);
 
@@ -136,11 +135,6 @@ public sealed record ConstructorNode() : AstNode
 
 public sealed record MethodNode(string Name) : AstNode
 {
-    private List<ParameterNode> Params;
-    private TypeRef @void;
-    private bool v;
-    private NativeMethod Native;
-
     public List<ParameterNode> Parameters { get; } = new();
     public TypeRef ReturnType { get; set; } = TypeRef.Void;
     public bool IsStatic { get; set; }
@@ -228,7 +222,7 @@ public sealed record SwitchStatement(
 public abstract record Instruction : AstNode;
 
 public sealed record SimpleInstruction(
-    global::ObjectIR.Core.Ast.OpCode OpCode,
+    global::ObjektRT.Core.AST.OpCode OpCode,
     string? Operand = null
 ) : Instruction;
 

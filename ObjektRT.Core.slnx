@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/ObjektRT.Core.Tests/ObjektRT.Core.Tests.csproj" />
+  </Folder>
+  <Project Path="ObjektRT.Core.csproj" />
+</Solution>

@@ -1,8 +1,7 @@
-namespace ObjectIR.Core.Serialization;
+namespace ObjektRT.Core.Serialization;
 
-using ObjectIR.Core.AST;
-using ObjectIR.Core.Ast;
-using OpCode = ObjectIR.Core.Ast.OpCode;
+using ObjektRT.Core.AST;
+using OpCode = ObjektRT.Core.AST.OpCode;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ObjectIR.Core.Attributes
+namespace ObjektRT.Core.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.All, Inherited = false, AllowMultiple = true)]
     abstract class ModuleCompilerAttribute : System.Attribute

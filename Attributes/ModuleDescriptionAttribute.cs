@@ -4,13 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ObjectIR.Core.Attributes
+namespace ObjektRT.Core.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.All, Inherited = false, AllowMultiple = true)]
-    abstract class ModulenameAttribute : System.Attribute
+    abstract class ModuleDescriptionAttribute : System.Attribute
     {
         public string Name { get; set; }
-        public ModuleNameAttribute(string name)
+        public ModuleDescriptionAttribute(string name)
         {
             this.Name = name;
         }

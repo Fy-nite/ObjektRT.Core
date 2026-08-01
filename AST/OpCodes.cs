@@ -1,7 +1,9 @@
-namespace ObjectIR.Core.Ast;
+namespace ObjektRT.Core.AST;
 
 public enum OpCode
 {
+    Nop,
+
     // Load instructions
     Ldarg,
     Ldloc,
@@ -14,6 +16,7 @@ public enum OpCode
     LdcI8,
     LdcR4,
     LdcR8,
+    Ldc,
     Ldstr,
     
     // Store instructions
@@ -43,7 +46,9 @@ public enum OpCode
     Cgt,
     CgtUn,
     CgeUn,
+    Cge,
     Clt,
+    Cle,
     
     // Control flow
     Br,
@@ -59,6 +64,7 @@ public enum OpCode
     Call,
     Callvirt,
     Calli,
+    NativeCall,
     Newobj,
     
     // Object operations
@@ -73,6 +79,7 @@ public enum OpCode
     Pop,
     
     // Conversions
+    Conv,
     ConvI4,
     ConvI8,
     ConvR4,
@@ -140,6 +147,7 @@ public static class OpCodeConverter
         ["ret"] = OpCode.Ret,
         ["call"] = OpCode.Call,
         ["callvirt"] = OpCode.Callvirt,
+        ["callnative"] = OpCode.NativeCall,
         ["calli"] = OpCode.Calli,
         ["newobj"] = OpCode.Newobj,
         ["newarr"] = OpCode.Newarr,

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-namespace ObjectIR.Core.Ast
+namespace ObjektRT.Core.AST
 {
     public class NativeMethod
     {

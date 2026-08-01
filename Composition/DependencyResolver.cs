@@ -1,4 +1,4 @@
-//namespace ObjectIR.Core.Composition;
+//namespace ObjektRT.Core.Composition;
 
 //using ObjectIR.Core.AST;
 //using ObjectIR.Core.IR;
