@@ -1,6 +1,8 @@
 namespace ObjectIR.Core.Serialization;
 
 using ObjectIR.Core.AST;
+using ObjectIR.Core.Ast;
+using OpCode = ObjectIR.Core.Ast.OpCode;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -92,7 +94,7 @@ public sealed class InstructionSerializer
         {
             SimpleInstruction si => new InstructionData
             {
-                OpCode = si.OpCode,
+                OpCode = OpCodeConverter.ToString(si.OpCode),
                 Operand = si.Operand
             },
             CallInstruction ci => new InstructionData
@@ -194,7 +196,7 @@ public sealed class InstructionSerializer
                 operand.TryGetProperty("constructor", out var cp) && cp.ValueKind == JsonValueKind.Object ? DeserializeMethodReference(cp) : null, 
                 new List<TypeRef>()
             ),
-            _ => new SimpleInstruction(opCode, operand.ValueKind == JsonValueKind.String ? operand.GetString() : null)
+            _ => new SimpleInstruction(OpCodeConverter.Parse(opCode), operand.ValueKind == JsonValueKind.String ? operand.GetString() : null)
         };
     }
 

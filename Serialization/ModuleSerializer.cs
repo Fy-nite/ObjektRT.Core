@@ -1,6 +1,8 @@
 namespace ObjectIR.Core.Serialization;
 
 using ObjectIR.Core.AST;
+using ObjectIR.Core.Ast;
+using OpCode = ObjectIR.Core.Ast.OpCode;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
@@ -259,7 +261,7 @@ public sealed class ModuleSerializer
     {
         return inst switch
         {
-            SimpleInstruction si => si.Operand != null ? $"{si.OpCode} {si.Operand}" : si.OpCode,
+            SimpleInstruction si => si.Operand != null ? $"{OpCodeConverter.ToString(si.OpCode)} {si.Operand}" : OpCodeConverter.ToString(si.OpCode),
             CallInstruction ci => $"{(ci.IsVirtual ? "callvirt" : "call")} {ci.Target.DeclaringType.Name}.{ci.Target.Name}({string.Join(", ", ci.Target.ParameterTypes.Select(p => p.Name))}) -> {ci.Target.ReturnType.Name}",
             NewObjInstruction noi => $"newobj {noi.Type.Name}.constructor({string.Join(", ", noi.Constructor?.ParameterTypes.Select(p => p.Name) ?? Array.Empty<string>())})",
             _ => inst.ToString() ?? inst.GetType().Name
@@ -270,7 +272,7 @@ public sealed class ModuleSerializer
     {
         if (inst is SimpleInstruction si)
         {
-            return si.OpCode is "ldloc" or "ldarg" or "ldc.i4" or "ldc.i8" or "ldstr";
+            return si.OpCode is OpCode.Ldloc or OpCode.Ldarg or OpCode.LdcI4 or OpCode.LdcI8 or OpCode.Ldstr;
         }
         return false;
     }

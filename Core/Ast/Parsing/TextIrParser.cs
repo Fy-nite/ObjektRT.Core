@@ -1,4 +1,6 @@
 using ObjectIR.Core.AST;
+using ObjectIR.Core.Ast;
+using OpCode = ObjectIR.Core.Ast.OpCode;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -589,7 +591,7 @@ public static class TextIrParser
         var parts = line.Split(new[] { ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
         var opcode = parts[0];
         var operand = parts.Length > 1 ? parts[1].Trim() : null;
-        return new SimpleInstruction(opcode, operand);
+        return new SimpleInstruction(OpCodeConverter.Parse(opcode), operand);
     }
 
     private static CallInstruction ParseCallCore(ReadOnlySpan<char> span, bool isVirtual)
@@ -610,8 +612,11 @@ public static class TextIrParser
         var (methodRef, args) = ParseTargetAndArgs(left);
         var returnTypeNode = new TypeRef(right.ToString());
 
-        // Update the return type on the method reference as well
-        var updatedMethodRef = methodRef with { ReturnType = returnTypeNode };
+        // Update the return type and parameter types on the method reference
+        var updatedMethodRef = methodRef with { 
+            ReturnType = returnTypeNode,
+            ParameterTypes = args.ToList()
+        };
 
         return new CallInstruction(updatedMethodRef, args, isVirtual);
     }
@@ -641,8 +646,9 @@ public static class TextIrParser
 
         var argsSpan = ctorSpan.Slice(openParenIndex + 1, closeParenIndex - (openParenIndex + 1));
         var args = ParseTypeList(argsSpan);
-        var method = new MethodReference(new TypeRef(typeName.ToString()), "constructor", TypeRef.Void, new List<TypeRef>());
-        return new NewObjInstruction(new TypeRef(typeName.ToString()), method, args.ToList());
+        var argList = args.ToList();
+        var method = new MethodReference(new TypeRef(typeName.ToString()), "constructor", TypeRef.Void, argList);
+        return new NewObjInstruction(new TypeRef(typeName.ToString()), method, argList);
     }
 
     private static (MethodReference Method, IReadOnlyList<TypeRef> Args) ParseTargetAndArgs(ReadOnlySpan<char> text)
