@@ -469,16 +469,27 @@ public static class TextIrParser
 
             var parts = caseLine["case ".Length..].Trim();
             int? val = null;
+            string? stringVal = null;
             if (parts.Equals("else:", StringComparison.OrdinalIgnoreCase))
             {
                 val = null;
             }
             else if (parts.EndsWith(":", StringComparison.Ordinal))
             {
-                if (int.TryParse(parts[..^1], out var intVal))
+                var valueText = parts[..^1];
+                if (valueText.Length >= 2 && valueText.StartsWith("\"", StringComparison.Ordinal) && valueText.EndsWith("\"", StringComparison.Ordinal))
+                {
+                    // String case value (quotes preserved, consistent with ldstr operands)
+                    stringVal = valueText;
+                }
+                else if (int.TryParse(valueText, out var intVal))
+                {
                     val = intVal;
+                }
                 else
-                    throw new TextIrParseException($"Expected integer case value, found '{parts[..^1]}'.");
+                {
+                    throw new TextIrParseException($"Expected integer or string case value, found '{valueText}'.");
+                }
             }
             else
             {
@@ -503,7 +514,7 @@ public static class TextIrParser
                     bodyStatements.Add(new InstructionStatement(ParseInstruction(stmtLine.Trim())));
             }
             
-            cases.Add(new SwitchCase(val, new BlockStatement(bodyStatements)));
+            cases.Add(new SwitchCase(val, new BlockStatement(bodyStatements)) { StringValue = stringVal });
         }
 
         reader.Expect("}");

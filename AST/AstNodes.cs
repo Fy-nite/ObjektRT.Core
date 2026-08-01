@@ -172,9 +172,12 @@ public sealed record TypeRef(string Name) : AstNode
 {
     public static readonly TypeRef Void = new("void");
     public static readonly TypeRef Int32 = new("int32");
+    public static readonly TypeRef Int64 = new("int64");
     public static readonly TypeRef Float32 = new("float32");
+    public static readonly TypeRef Float64 = new("float64");
     public static readonly TypeRef String = new("string");
     public static readonly TypeRef Bool = new("bool");
+    public static readonly TypeRef Object = new("object");
 
     public static implicit operator TypeRef(string name) => new TypeRef(name);
 }
@@ -212,7 +215,13 @@ public sealed record WhileStatement(
 public sealed record SwitchCase(
     int? Value,
     BlockStatement Body
-) : AstNode;
+) : AstNode
+{
+    /// <summary>
+    /// Optional string case value (e.g. <c>case "start":</c>). Mutually exclusive with <see cref="Value"/>.
+    /// </summary>
+    public string? StringValue { get; init; }
+}
 
 public sealed record SwitchStatement(
     string Expression,

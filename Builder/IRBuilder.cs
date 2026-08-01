@@ -377,7 +377,9 @@ public sealed class InstructionBuilder
     }
 
     public InstructionBuilder LdcI4(int value) => Emit(OpCode.LdcI4, value.ToString());
-    public InstructionBuilder LdcR4(float value) => Emit(OpCode.LdcR4, value.ToString());
+    public InstructionBuilder LdcI8(long value) => Emit(OpCode.LdcI8, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    public InstructionBuilder LdcR4(float value) => Emit(OpCode.LdcR4, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    public InstructionBuilder LdcR8(double value) => Emit(OpCode.LdcR8, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
     public InstructionBuilder Ldstr(string value) => Emit(OpCode.Ldstr, value);
     public InstructionBuilder Ldnull() => Emit(OpCode.Ldnull);
 
@@ -429,6 +431,14 @@ public sealed class InstructionBuilder
     // Object operations
     public InstructionBuilder Ldelem() => Emit(OpCode.Ldelem);
     public InstructionBuilder Stelem() => Emit(OpCode.Stelem);
+    public InstructionBuilder Ldlen() => Emit(OpCode.Ldlen);
+
+    public InstructionBuilder Newarr(TypeRef elementType)
+    {
+        var instr = new SimpleInstruction(OpCode.Newarr, elementType.Name) { Location = _currentLocation };
+        _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
+        return this;
+    }
 
     public InstructionBuilder Newobj(TypeRef type, MethodReference? constructor = null)
     {
@@ -443,6 +453,8 @@ public sealed class InstructionBuilder
 
     // Control flow
     public InstructionBuilder Ret() => Emit(OpCode.Ret);
+    public InstructionBuilder Break() => Emit(OpCode.Break);
+    public InstructionBuilder Continue() => Emit(OpCode.Continue);
 
     public InstructionBuilder If(string condition, Action<InstructionBuilder> thenBlock, Action<InstructionBuilder>? elseBlock = null)
     {
@@ -504,6 +516,15 @@ public sealed class SwitchBuilder
         var bodyBuilder = new InstructionBuilder(_methodBuilder, bodyStatements) { _currentLocation = _location };
         body(bodyBuilder);
         Cases.Add(new SwitchCase(value, new BlockStatement(bodyStatements) { Location = _location }) { Location = _location });
+        return this;
+    }
+
+    public SwitchBuilder Case(string value, Action<InstructionBuilder> body)
+    {
+        var bodyStatements = new List<Statement>();
+        var bodyBuilder = new InstructionBuilder(_methodBuilder, bodyStatements) { _currentLocation = _location };
+        body(bodyBuilder);
+        Cases.Add(new SwitchCase(null, new BlockStatement(bodyStatements) { Location = _location }) { Location = _location, StringValue = value });
         return this;
     }
 }

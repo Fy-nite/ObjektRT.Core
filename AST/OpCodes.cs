@@ -64,6 +64,9 @@ public enum OpCode
     Call,
     Callvirt,
     Calli,
+    /// <summary>
+    ///  this is some bs from the runtime, it's not required since we reuse call.
+    /// </summary>
     NativeCall,
     Newobj,
     

@@ -247,7 +247,7 @@ public sealed class ModuleSerializer
                 sb.AppendLine($"{ind}switch ({switchStmt.Expression}) {{");
                 foreach (var swCase in switchStmt.Cases)
                 {
-                    var caseVal = swCase.Value?.ToString() ?? "else";
+                    var caseVal = swCase.StringValue ?? swCase.Value?.ToString() ?? "else";
                     sb.AppendLine($"{ind}    case {caseVal}:");
                     DumpBlockAsIRCode(sb, swCase.Body, indentLevel + 2);
                 }

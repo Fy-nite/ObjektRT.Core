@@ -79,6 +79,7 @@ public sealed class InstructionSerializer
                     cases = sw.Cases.Select(c => new
                     {
                         value = c.Value,
+                        stringValue = c.StringValue,
                         body = c.Body.Statements.Select(CreateStatementData).ToList()
                     }).ToList()
                 }
@@ -174,9 +175,13 @@ public sealed class InstructionSerializer
             int? val = null;
             if (c.TryGetProperty("value", out var vp) && vp.ValueKind == JsonValueKind.Number)
                 val = vp.GetInt32();
-            
+
+            string? stringVal = null;
+            if (c.TryGetProperty("stringValue", out var sv) && sv.ValueKind == JsonValueKind.String)
+                stringVal = sv.GetString();
+
             var body = new BlockStatement(DeserializeInstructions(c.GetProperty("body")));
-            cases.Add(new SwitchCase(val, body));
+            cases.Add(new SwitchCase(val, body) { StringValue = stringVal });
         }
         return new SwitchStatement(expr, cases);
     }
