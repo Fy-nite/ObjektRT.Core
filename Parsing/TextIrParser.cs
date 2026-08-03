@@ -756,6 +756,9 @@ public static class TextIrParser
             throw new TextIrParseException("Missing call target.");
         }
 
+        // Constructor calls are emitted as "Type..ctor" (type + the ".ctor"
+        // member name). Split on the LAST dot as usual, then fold the trailing
+        // ".ctor" back onto the member when the type would otherwise be empty.
         var lastDot = targetSpan.LastIndexOf('.');
         if (lastDot < 0)
         {
@@ -764,6 +767,13 @@ public static class TextIrParser
 
         var typeName = targetSpan.Slice(0, lastDot).Trim();
         var methodName = targetSpan.Slice(lastDot + 1).Trim();
+
+        if (typeName.Length > 0 && typeName[^1] == '.' && methodName.Equals("ctor", StringComparison.OrdinalIgnoreCase))
+        {
+            // "Type..ctor" → type "Type", member ".ctor".
+            typeName = typeName.Slice(0, typeName.Length - 1).Trim();
+            methodName = ".ctor";
+        }
 
         if (typeName.IsEmpty || methodName.IsEmpty)
         {
