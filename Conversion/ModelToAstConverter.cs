@@ -94,6 +94,7 @@ public sealed class ModelToAstConverter
     private StructNode ConvertStruct(TypeRecord type)
     {
         var str = new StructNode(S(type.NameIndex));
+        str.Attributes.AddRange(RestoreAttributes(type.Attributes));
         foreach (var f in type.Fields)
             str.Fields.Add(new FieldNode(S(f.NameIndex), new TypeRef(S(f.TypeIndex))) { Access = AccessModifier.Public });
         if (type.Methods.Count > 0)
@@ -108,6 +109,7 @@ public sealed class ModelToAstConverter
             IsAbstract = (type.Flags & TypeFlags.Abstract) != 0,
             IsSealed = (type.Flags & TypeFlags.Sealed) != 0,
         };
+        cls.Attributes.AddRange(RestoreAttributes(type.Attributes));
 
         if (type.BaseTypeIndex >= 0 && type.BaseTypeIndex < _mod.Types.Count)
             cls.BaseTypes.Add(S(_mod.Types[type.BaseTypeIndex].NameIndex));
@@ -127,11 +129,21 @@ public sealed class ModelToAstConverter
         return cls;
     }
 
+    /// <summary>Restores AST attribute nodes from wire-model attribute records.</summary>
+    private IEnumerable<AttributeNode> RestoreAttributes(IEnumerable<AttributeRecord> records)
+    {
+        foreach (var attr in records)
+        {
+            yield return new AttributeNode(S(attr.NameIndex), attr.ArgIndices.Select(i => S(i)));
+        }
+    }
+
     // ── Methods ───────────────────────────────────────────────────────
 
     private ConstructorNode ConvertConstructor(MethodRecord m)
     {
         var ctor = new ConstructorNode();
+        ctor.Attributes.AddRange(RestoreAttributes(m.Attributes));
         foreach (var p in m.Params)
             ctor.Parameters.Add(new ParameterNode(S(p.NameIndex), new TypeRef(S(p.TypeIndex))));
         ctor.Body = new BlockStatement(ReconstructBody(m));
@@ -149,6 +161,7 @@ public sealed class ModelToAstConverter
             IsAbstract = (m.Flags & MethodFlags.Abstract) != 0,
             Access = MapAccess(m.Access),
         };
+        method.Attributes.AddRange(RestoreAttributes(m.Attributes));
         foreach (var p in m.Params)
             method.Parameters.Add(new ParameterNode(S(p.NameIndex), new TypeRef(S(p.TypeIndex))));
         method.Body = new BlockStatement(ReconstructBody(m));

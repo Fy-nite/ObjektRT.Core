@@ -95,6 +95,13 @@ public sealed class ClassBuilder
         return this;
     }
 
+    /// <summary>Attaches an annotation (e.g. <c>@DllImport("x.dll")</c>) to the class.</summary>
+    public ClassBuilder Attribute(string name, params string[] arguments)
+    {
+        _class.Attributes.Add(new AttributeNode(name, arguments));
+        return this;
+    }
+
     public ClassBuilder Generic(params string[] parameters)
     {
         foreach (var param in parameters)
@@ -192,6 +199,13 @@ public sealed class StructBuilder
         return this;
     }
 
+    /// <summary>Attaches an annotation to the struct.</summary>
+    public StructBuilder Attribute(string name, params string[] arguments)
+    {
+        _struct.Attributes.Add(new AttributeNode(name, arguments));
+        return this;
+    }
+
     public IRBuilder EndStruct() => _builder;
 }
 
@@ -272,6 +286,15 @@ public sealed class MethodBuilder
     public MethodBuilder Virtual()
     {
         if (_method != null) _method.IsVirtual = true;
+        return this;
+    }
+
+    /// <summary>Attaches an annotation to the method (or constructor).</summary>
+    public MethodBuilder Attribute(string name, params string[] arguments)
+    {
+        var attr = new AttributeNode(name, arguments);
+        if (_method != null) _method.Attributes.Add(attr);
+        else if (_ctor != null) _ctor.Attributes.Add(attr);
         return this;
     }
 

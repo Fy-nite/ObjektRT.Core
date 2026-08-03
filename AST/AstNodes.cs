@@ -51,6 +51,7 @@ public sealed record InterfaceNode(string Name) : AstNode
     public string? Namespace { get; set; }
     public AccessModifier Access { get; set; } = AccessModifier.Public;
     public List<MethodSignature> Methods { get; } = new();
+    public List<AttributeNode> Attributes { get; } = new();
 
     public InterfaceNode(string name, List<MethodSignature> methods) : this(name)
     {
@@ -64,6 +65,7 @@ public sealed record StructNode(string Name) : AstNode
     public AccessModifier Access { get; set; } = AccessModifier.Public;
     public List<MethodNode>? Methods { get; set; }
     public List<FieldNode> Fields { get; } = new();
+    public List<AttributeNode> Attributes { get; } = new();
 }
 
 public sealed record ClassNode(string Name) : AstNode
@@ -76,6 +78,7 @@ public sealed record ClassNode(string Name) : AstNode
     public List<FieldNode> Fields { get; } = new();
     public List<ConstructorNode> Constructors { get; } = new();
     public List<MethodNode> Methods { get; } = new();
+    public List<AttributeNode> Attributes { get; } = new();
     public bool IsAbstract { get; set; }
     public bool IsSealed { get; set; }
     public bool IsStatic { get; set; }
@@ -91,6 +94,21 @@ public sealed record ClassNode(string Name) : AstNode
 }
 
 public sealed record GenericParameterNode(string Name) : AstNode;
+
+/// <summary>
+/// An annotation/attribute applied to a type or member. Matches the wire
+/// model's <c>AttributeRecord</c>: a name plus ordered positional arguments
+/// stored as text (string arguments retain their quotes).
+/// </summary>
+public sealed record AttributeNode(string Name) : AstNode
+{
+    public List<string> Arguments { get; } = new();
+
+    public AttributeNode(string name, IEnumerable<string> arguments) : this(name)
+    {
+        Arguments.AddRange(arguments);
+    }
+}
 
 public sealed record FieldNode(string Name, TypeRef FieldType) : AstNode
 {
@@ -124,6 +142,7 @@ public sealed record MethodSignature(string Name) : AstNode
 public sealed record ConstructorNode() : AstNode
 {
     public List<ParameterNode> Parameters { get; } = new();
+    public List<AttributeNode> Attributes { get; } = new();
     public BlockStatement Body { get; set; } = new(new());
 
     public ConstructorNode(IEnumerable<ParameterNode> parameters, BlockStatement body) : this()
@@ -145,6 +164,7 @@ public sealed record MethodNode(string Name) : AstNode
     public BlockStatement Body { get; set; } = new(new());
     public AccessModifier Access { get; set; } = AccessModifier.Public;
     public List<LocalDeclarationStatement> Locals { get; } = new();
+    public List<AttributeNode> Attributes { get; } = new();
     public NativeMethod? NativeImpl { get; set; }
 
     public MethodNode(string name, IEnumerable<ParameterNode> parameters, TypeRef returnType, bool isStatic, string? implements, BlockStatement body) : this(name)    

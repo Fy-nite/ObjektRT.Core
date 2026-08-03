@@ -26,21 +26,23 @@ public static class TextIrParser
 
         while (!reader.IsAtEnd)
         {
+            var attributes = ReadAttributes(reader);
+
             if (reader.PeekStartsWith("interface "))
             {
-                interfaces.Add(ParseInterface(reader));
+                interfaces.Add(ParseInterface(reader, attributes));
                 continue;
             }
 
             if (reader.PeekStartsWith("class "))
             {
-                classes.Add(ParseClass(reader));
+                classes.Add(ParseClass(reader, attributes));
                 continue;
             }
 
             if (reader.PeekStartsWith("struct "))
             {
-                structs.Add(ParseStruct(reader));
+                structs.Add(ParseStruct(reader, attributes));
                 continue;
             }
 
@@ -90,7 +92,7 @@ public static class TextIrParser
         return (name, version);
     }
 
-    private static StructNode ParseStruct(TokenReader reader)
+    private static StructNode ParseStruct(TokenReader reader, List<AttributeNode> attributes)
     {
         var line = reader.ReadLine();
             #if NET47
@@ -129,10 +131,11 @@ public static class TextIrParser
         reader.Expect("}");
         var node = new StructNode(name);
         node.Fields.AddRange(fields);
+        node.Attributes.AddRange(attributes);
         return node;
     }
 
-    private static InterfaceNode ParseInterface(TokenReader reader)
+    private static InterfaceNode ParseInterface(TokenReader reader, List<AttributeNode> attributes)
     {
         var line = reader.ReadLine();
             #if NET47
@@ -155,10 +158,12 @@ public static class TextIrParser
         }
 
         reader.Expect("}");
-        return new InterfaceNode(name, methods);
+        var node = new InterfaceNode(name, methods);
+        node.Attributes.AddRange(attributes);
+        return node;
     }
 
-    private static ClassNode ParseClass(TokenReader reader)
+    private static ClassNode ParseClass(TokenReader reader, List<AttributeNode> attributes)
     {
         var line = reader.ReadLine();
             #if NET47
@@ -196,22 +201,29 @@ public static class TextIrParser
 
         while (!reader.PeekIs("}"))
         {
+            var memberAttributes = ReadAttributes(reader);
             var memberLine = reader.ReadLine();
             if (IsField(memberLine))
             {
+                // The wire model has no field attribute slot; ignore (kept for
+                // forward-compat with hand-written IR that annotates fields).
                 fields.Add(ParseField(memberLine));
                 continue;
             }
 
             if (IsConstructor(memberLine))
             {
-                constructors.Add(ParseConstructor(reader, memberLine));
+                var ctor = ParseConstructor(reader, memberLine);
+                ctor.Attributes.AddRange(memberAttributes);
+                constructors.Add(ctor);
                 continue;
             }
 
             if (IsMethod(memberLine))
             {
-                methods.Add(ParseMethod(reader, memberLine));
+                var method = ParseMethod(reader, memberLine);
+                method.Attributes.AddRange(memberAttributes);
+                methods.Add(method);
                 continue;
             }
 
@@ -219,7 +231,73 @@ public static class TextIrParser
         }
 
         reader.Expect("}");
-        return new ClassNode(name, baseTypes, fields, constructors, methods);
+        var node = new ClassNode(name, baseTypes, fields, constructors, methods);
+        node.Attributes.AddRange(attributes);
+        return node;
+    }
+
+    /// <summary>
+    /// Reads any consecutive <c>@Name(args)</c> annotation lines ahead of the
+    /// current position. Consumes nothing when the next line is not an annotation.
+    /// </summary>
+    private static List<AttributeNode> ReadAttributes(TokenReader reader)
+    {
+        var attributes = new List<AttributeNode>();
+        while (!reader.IsAtEnd && reader.PeekStartsWith("@"))
+        {
+            attributes.Add(ParseAttributeLine(reader.ReadLine()));
+        }
+        return attributes;
+    }
+
+    /// <summary>Parses a single <c>@Name</c> or <c>@Name(arg1, arg2)</c> line.</summary>
+    private static AttributeNode ParseAttributeLine(string line)
+    {
+        var text = line.Trim();
+        if (text.Length < 2 || text[0] != '@')
+        {
+            throw new TextIrParseException($"Invalid annotation line '{line}'.");
+        }
+
+        var openParenIndex = text.IndexOf('(');
+        if (openParenIndex < 0)
+        {
+            var name = text.Substring(1).Trim();
+            if (name.Length == 0)
+            {
+                throw new TextIrParseException("Annotation name is missing.");
+            }
+            return new AttributeNode(name);
+        }
+
+        var name2 = text.Substring(1, openParenIndex - 1).Trim();
+        if (name2.Length == 0)
+        {
+            throw new TextIrParseException("Annotation name is missing.");
+        }
+
+        var closeParenIndex = text.LastIndexOf(')');
+        if (closeParenIndex < openParenIndex)
+        {
+            throw new TextIrParseException($"Invalid annotation syntax '{text}'.");
+        }
+
+        var argsText = text.Substring(openParenIndex + 1, closeParenIndex - (openParenIndex + 1));
+        var args = new List<string>();
+        if (argsText.Trim().Length > 0)
+        {
+            foreach (var item in SplitTopLevel(argsText))
+            {
+                var trimmed = item.Trim();
+                if (trimmed.Length == 0)
+                {
+                    throw new TextIrParseException("Empty annotation argument.");
+                }
+                args.Add(trimmed);
+            }
+        }
+
+        return new AttributeNode(name2, args);
     }
 
     private static bool IsField(string line) => line.Contains(" field ", StringComparison.OrdinalIgnoreCase) || line.StartsWith("field ", StringComparison.OrdinalIgnoreCase);

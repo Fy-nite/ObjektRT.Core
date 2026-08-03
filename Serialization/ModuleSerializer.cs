@@ -127,6 +127,7 @@ public sealed class ModuleSerializer
         inheritance.AddRange(classDef.Interfaces);
 
         var inheritanceStr = inheritance.Count > 0 ? $" : {string.Join(", ", inheritance)}" : "";
+        DumpAttributesAsIRCode(sb, classDef.Attributes, 0);
         sb.AppendLine($"class {classDef.Name}{inheritanceStr} {{");
 
         foreach (var field in classDef.Fields)
@@ -154,6 +155,7 @@ public sealed class ModuleSerializer
 
     private void DumpStructAsIRCode(StringBuilder sb, StructNode structDef)
     {
+        DumpAttributesAsIRCode(sb, structDef.Attributes, 0);
         sb.AppendLine($"struct {structDef.Name} {{");
         foreach (var field in structDef.Fields)
         {
@@ -165,6 +167,7 @@ public sealed class ModuleSerializer
     private void DumpConstructorAsIRCode(StringBuilder sb, ConstructorNode ctor)
     {
         var parameters = string.Join(", ", ctor.Parameters.Select(p => $"{p.Name}: {p.ParameterType.Name}"));
+        DumpAttributesAsIRCode(sb, ctor.Attributes, 1);
         sb.AppendLine($"    constructor({parameters}) {{");
         DumpBlockAsIRCode(sb, ctor.Body, 2);
         sb.AppendLine("    }");
@@ -175,7 +178,8 @@ public sealed class ModuleSerializer
         var parameters = string.Join(", ", method.Parameters.Select(p => $"{p.Name}: {p.ParameterType.Name}"));
         var implements = method.Implements != null ? $" implements {method.Implements}" : "";
         var staticPrefix = method.IsStatic ? "static " : "";
-        
+
+        DumpAttributesAsIRCode(sb, method.Attributes, 1);
         sb.AppendLine($"    {staticPrefix}method {method.Name}({parameters}) -> {method.ReturnType.Name}{implements} {{");
         
         foreach (var local in method.Locals)
@@ -188,6 +192,22 @@ public sealed class ModuleSerializer
 
         DumpBlockAsIRCode(sb, method.Body, 2);
         sb.AppendLine("    }");
+    }
+
+    private static void DumpAttributesAsIRCode(StringBuilder sb, IEnumerable<AttributeNode> attributes, int indentLevel)
+    {
+        var ind = new string(' ', indentLevel * 4);
+        foreach (var attr in attributes)
+        {
+            if (attr.Arguments.Count > 0)
+            {
+                sb.AppendLine($"{ind}@{attr.Name}({string.Join(", ", attr.Arguments)})");
+            }
+            else
+            {
+                sb.AppendLine($"{ind}@{attr.Name}");
+            }
+        }
     }
 
     private void DumpBlockAsIRCode(StringBuilder sb, BlockStatement block, int indentLevel)

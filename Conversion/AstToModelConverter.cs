@@ -72,6 +72,7 @@ public sealed class AstToModelConverter
     private void AddInterface(InterfaceNode iface)
     {
         var type = NewType(TypeKind.Interface, iface.Name, isAbstract: true, isSealed: false);
+        AddAttributes(type, iface.Attributes);
         foreach (var ms in iface.Methods)
         {
             var method = new MethodRecord
@@ -90,6 +91,7 @@ public sealed class AstToModelConverter
     private void AddClass(ClassNode cls)
     {
         var type = NewType(TypeKind.Class, cls.Name, cls.IsAbstract, cls.IsSealed);
+        AddAttributes(type, cls.Attributes);
 
         // Base type → type-table index (only resolvable when declared in this
         // module; the ORBT format cannot reference external bases).
@@ -117,6 +119,7 @@ public sealed class AstToModelConverter
     private void AddStruct(StructNode str)
     {
         var type = NewType(TypeKind.Struct, str.Name, isAbstract: false, isSealed: false);
+        AddAttributes(type, str.Attributes);
         foreach (var f in str.Fields)
             type.Fields.Add(new FieldRecord(Intern(f.Name), Intern(f.FieldType.Name)));
         type.FieldCount = (ushort)type.Fields.Count;
@@ -166,6 +169,7 @@ public sealed class AstToModelConverter
             Access = MemberAccess.Public,
             Flags = MethodFlags.None,
         };
+        AddAttributes(method, ctor.Attributes);
         AddParameters(method, ctor.Parameters);
         ConvertBody(method, ctor.Body);
         return method;
@@ -183,9 +187,26 @@ public sealed class AstToModelConverter
                   | (m.IsOverride ? MethodFlags.Override : MethodFlags.None)
                   | (m.IsAbstract ? MethodFlags.Abstract : MethodFlags.None),
         };
+        AddAttributes(method, m.Attributes);
         AddParameters(method, m.Parameters);
         ConvertBody(method, m.Body);
         return method;
+    }
+
+    private void AddAttributes(TypeRecord type, IEnumerable<AttributeNode> attributes)
+    {
+        foreach (var attr in attributes)
+        {
+            type.Attributes.Add(new AttributeRecord(Intern(attr.Name), attr.Arguments.Select(Intern).ToList()));
+        }
+    }
+
+    private void AddAttributes(MethodRecord method, IEnumerable<AttributeNode> attributes)
+    {
+        foreach (var attr in attributes)
+        {
+            method.Attributes.Add(new AttributeRecord(Intern(attr.Name), attr.Arguments.Select(Intern).ToList()));
+        }
     }
 
     private void AddParameters(MethodRecord method, IEnumerable<ParameterNode> parameters)
