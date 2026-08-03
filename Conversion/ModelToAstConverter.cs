@@ -96,7 +96,7 @@ public sealed class ModelToAstConverter
         var str = new StructNode(S(type.NameIndex));
         str.Attributes.AddRange(RestoreAttributes(type.Attributes));
         foreach (var f in type.Fields)
-            str.Fields.Add(new FieldNode(S(f.NameIndex), new TypeRef(S(f.TypeIndex))) { Access = AccessModifier.Public });
+            str.Fields.Add(new FieldNode(S(f.NameIndex), new TypeRef(S(f.TypeIndex))) { Access = AccessModifier.Public, IsStatic = f.IsStatic });
         if (type.Methods.Count > 0)
             str.Methods = type.Methods.Select(ConvertMethod).ToList();
         return str;
@@ -117,7 +117,7 @@ public sealed class ModelToAstConverter
             cls.Interfaces.Add(S(ifIdx));
 
         foreach (var f in type.Fields)
-            cls.Fields.Add(new FieldNode(S(f.NameIndex), new TypeRef(S(f.TypeIndex))) { Access = AccessModifier.Public });
+            cls.Fields.Add(new FieldNode(S(f.NameIndex), new TypeRef(S(f.TypeIndex))) { Access = AccessModifier.Public, IsStatic = f.IsStatic });
 
         foreach (var m in type.Methods)
         {

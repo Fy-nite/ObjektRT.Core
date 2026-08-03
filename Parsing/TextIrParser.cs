@@ -309,6 +309,7 @@ public static class TextIrParser
     private static FieldNode ParseField(string line)
     {
         var access = AccessModifier.Private;
+        var isStatic = false;
         var remaining = line;
 
         if (remaining.StartsWith("private ", StringComparison.OrdinalIgnoreCase))
@@ -333,6 +334,11 @@ public static class TextIrParser
         }
 
         remaining = remaining.Trim();
+        if (remaining.StartsWith("static ", StringComparison.OrdinalIgnoreCase))
+        {
+            isStatic = true;
+            remaining = remaining.Substring("static ".Length);
+        }
         if (remaining.StartsWith("field ", StringComparison.OrdinalIgnoreCase))
         {
             remaining = remaining.Substring("field ".Length);
@@ -356,7 +362,7 @@ public static class TextIrParser
             throw new TextIrParseException("Invalid field declaration.");
         }
 
-        return new FieldNode(name, new TypeRef(type), access);
+        return new FieldNode(name, new TypeRef(type), access) { IsStatic = isStatic };
     }
 
     private static ConstructorNode ParseConstructor(TokenReader reader, string line)
