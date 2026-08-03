@@ -399,6 +399,13 @@ public sealed class InstructionBuilder
         return this;
     }
 
+    public InstructionBuilder Stsfld(FieldReference field)
+    {
+        var instr = new SimpleInstruction(OpCode.Stsfld, $"{field.DeclaringType.Name}::{field.Name}") { Location = _currentLocation };
+        _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
+        return this;
+    }
+
     public InstructionBuilder LdcI4(int value) => Emit(OpCode.LdcI4, value.ToString());
     public InstructionBuilder LdcI8(long value) => Emit(OpCode.LdcI8, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
     public InstructionBuilder LdcR4(float value) => Emit(OpCode.LdcR4, value.ToString(System.Globalization.CultureInfo.InvariantCulture));

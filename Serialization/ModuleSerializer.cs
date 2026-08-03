@@ -132,7 +132,8 @@ public sealed class ModuleSerializer
 
         foreach (var field in classDef.Fields)
         {
-            sb.AppendLine($"    {field.Access.ToString().ToLower()} field {field.Name}: {field.FieldType.Name}");
+            var staticKw = field.IsStatic ? "static " : "";
+            sb.AppendLine($"    {field.Access.ToString().ToLower()} {staticKw}field {field.Name}: {field.FieldType.Name}");
         }
 
         if (classDef.Fields.Count > 0 && (classDef.Methods.Count > 0 || classDef.Constructors.Count > 0))
@@ -159,7 +160,8 @@ public sealed class ModuleSerializer
         sb.AppendLine($"struct {structDef.Name} {{");
         foreach (var field in structDef.Fields)
         {
-            sb.AppendLine($"    field {field.Name}: {field.FieldType.Name}");
+            var staticKw = field.IsStatic ? "static " : "";
+            sb.AppendLine($"    {staticKw}field {field.Name}: {field.FieldType.Name}");
         }
         sb.AppendLine("}");
     }

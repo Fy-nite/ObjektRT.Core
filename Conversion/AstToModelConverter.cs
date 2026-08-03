@@ -54,7 +54,7 @@ public sealed class AstToModelConverter
     public ORBTModule Convert(ModuleNode ast)
     {
         _mod.ModuleName = ast.Name;
-        _mod.FormatVersion = 0x01;
+        _mod.FormatVersion = 0x02; // v0x02: FieldRecord gains an IsStatic flag byte
         _mod.Version = ParseVersion(ast.Version);
 
         foreach (var iface in ast.Interfaces)
@@ -106,7 +106,7 @@ public sealed class AstToModelConverter
         type.InterfaceCount = (ushort)type.InterfaceIndices.Count;
 
         foreach (var f in cls.Fields)
-            type.Fields.Add(new FieldRecord(Intern(f.Name), Intern(f.FieldType.Name)));
+            type.Fields.Add(new FieldRecord(Intern(f.Name), Intern(f.FieldType.Name), f.IsStatic));
         type.FieldCount = (ushort)type.Fields.Count;
 
         foreach (var ctor in cls.Constructors)
@@ -121,7 +121,7 @@ public sealed class AstToModelConverter
         var type = NewType(TypeKind.Struct, str.Name, isAbstract: false, isSealed: false);
         AddAttributes(type, str.Attributes);
         foreach (var f in str.Fields)
-            type.Fields.Add(new FieldRecord(Intern(f.Name), Intern(f.FieldType.Name)));
+            type.Fields.Add(new FieldRecord(Intern(f.Name), Intern(f.FieldType.Name), f.IsStatic));
         type.FieldCount = (ushort)type.Fields.Count;
 
         if (str.Methods != null)

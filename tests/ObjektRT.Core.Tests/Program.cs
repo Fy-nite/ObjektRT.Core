@@ -139,6 +139,38 @@ Check(
     RawOf(loopModel4, "Program", "Main").SequenceEqual(loopBytes1),
     "binary → AST → wire is byte-identical");
 
+// ── 3b. Static field metadata (text + binary) ─────────────────────────────
+
+Console.WriteLine("== 3b. Static field metadata ==");
+
+const string StaticFieldOil = """
+module FieldsTest version 1.0.0
+
+class Counter {
+    static field total: int32
+    field label: string
+}
+""";
+
+var fieldsModel1 = new ObjectILParser(StaticFieldOil).ParseModule();
+var counterType = fieldsModel1.Types.First(t => fieldsModel1.Resolve(t.NameIndex) == "Counter");
+var totalField = counterType.Fields.First(f => fieldsModel1.Resolve(f.NameIndex) == "total");
+var labelField = counterType.Fields.First(f => fieldsModel1.Resolve(f.NameIndex) == "label");
+Check(totalField.IsStatic && !labelField.IsStatic, "static flag parsed from text IR");
+
+var fieldsBytes = new ORBTWriter().WriteModule(fieldsModel1);
+var fieldsModel2 = OrbtFileReader.ReadBytes(fieldsBytes);
+var total2 = fieldsModel2.Types[0].Fields.First(f => fieldsModel2.Resolve(f.NameIndex) == "total");
+var label2 = fieldsModel2.Types[0].Fields.First(f => fieldsModel2.Resolve(f.NameIndex) == "label");
+Check(total2.IsStatic && !label2.IsStatic, "static flag survives ORBT binary round-trip");
+
+// AST restore: ModelToAstConverter maps the flag back onto FieldNode.IsStatic.
+var fieldsAst = new ModelToAstConverter().Convert(fieldsModel2);
+var counterAst = fieldsAst.Classes.First(c => c.Name == "Counter");
+Check(counterAst.Fields.First(f => f.Name == "total").IsStatic
+      && !counterAst.Fields.First(f => f.Name == "label").IsStatic,
+    "static flag restored to AST");
+
 // ── 4. Opcode mapping coverage ─────────────────────────────────────────────
 
 Console.WriteLine("== 4. Opcode coverage ==");
