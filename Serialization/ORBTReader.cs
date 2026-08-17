@@ -28,10 +28,13 @@ public class ORBTReader
 
     private void ReadHeader(ORBTModule mod)
     {
-        // Magic: 4 bytes "ORBT"
-        uint magic = _stream.ReadU32();
-        if (magic != 0x4F524254)
-            throw new InvalidDataException($"Invalid ORBT magic: expected 0x4F524254, got 0x{magic:X8}");
+        // Magic: 4 literal bytes "ORBT" (4F 52 42 54), checked as raw bytes.
+        // Reading them as a little-endian u32 would yield 0x5442524F ("TBRO").
+        var magic = _stream.ReadBytes(4);
+        if (magic[0] != (byte)'O' || magic[1] != (byte)'R'
+            || magic[2] != (byte)'B' || magic[3] != (byte)'T')
+            throw new InvalidDataException(
+                $"Invalid ORBT magic: expected \"ORBT\", got \"{System.Text.Encoding.ASCII.GetString(magic)}\"");
 
         mod.FormatVersion = _stream.ReadU8();
         if (mod.FormatVersion != 0x01 && mod.FormatVersion != 0x02)

@@ -36,7 +36,9 @@ public class ORBTWriter
 
     private void WriteHeader(ORBTModule mod)
     {
-        WriteU32(0x4F524254); // "ORBT"
+        // Magic: 4 literal bytes "ORBT" (4F 52 42 54). Must not go through
+        // WriteU32, which is little-endian and would emit the reversed "TBRO".
+        WriteU8(0x4F); WriteU8(0x52); WriteU8(0x42); WriteU8(0x54);
         WriteU8(mod.FormatVersion);
         WriteString(mod.ModuleName);
         WriteU16(mod.Version.Major);
@@ -144,7 +146,7 @@ public class ORBTWriter
         {
             WriteU16(imp.ModuleIndex);
             WriteU16(imp.SymbolIndex);
-            WriteU16((ushort)imp.Kind);
+            WriteU8((byte)imp.Kind);
             WriteU8(imp.Flags);
         }
     }
@@ -155,7 +157,7 @@ public class ORBTWriter
         foreach (var exp in mod.Exports)
         {
             WriteU16(exp.NameIndex);
-            WriteU16((ushort)exp.Kind);
+            WriteU8((byte)exp.Kind);
             WriteU32(exp.LocalIndex);
             WriteU16(exp.ModuleIndex);
         }

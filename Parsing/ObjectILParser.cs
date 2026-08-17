@@ -226,6 +226,31 @@ public class ObjectILParser
         var nameTok = ExpectIdentifier();
         type.NameIndex = mod.StringPool.Add(nameTok.Text);
 
+        // Base type / interface list: class Foo : Base, IFace { ... }
+        if (_tokenizer.PeekToken().Kind == TokenKind.Colon)
+        {
+            _tokenizer.AdvanceToken();
+            var first = true;
+            while (true)
+            {
+                var baseName = ExpectIdentifier().Text;
+                if (first)
+                {
+                    // The first entry is the base type when it resolves to a
+                    // type declared in this module; otherwise it is treated as
+                    // an interface reference (external bases cannot be indexed).
+                    type.BaseTypeIndex = FindTypeIndex(mod, baseName);
+                    first = false;
+                }
+                else
+                {
+                    type.InterfaceIndices.Add(mod.StringPool.Add(baseName));
+                    type.InterfaceCount++;
+                }
+                if (TryMatch(TokenKind.Comma) == null) break;
+            }
+        }
+
         if (_tokenizer.PeekToken().Text == "implements")
         {
             _tokenizer.AdvanceToken();
@@ -246,10 +271,23 @@ public class ObjectILParser
         mod.Types.Add(type);
     }
 
+    private int FindTypeIndex(ORBTModule mod, string name)
+    {
+        for (int i = 0; i < mod.Types.Count; i++)
+        {
+            if (mod.Resolve(mod.Types[i].NameIndex) == name)
+                return i;
+        }
+        return -1;
+    }
+
     private void ParseMember(ORBTModule mod, TypeRecord type)
     {
         var access = MemberAccess.Public;
         var mflags = MethodFlags.None;
+
+        // @Attributes before the member declaration.
+        var attributes = ParseAttributes(mod);
 
         while (_tokenizer.PeekToken().Kind == TokenKind.Keyword)
         {
@@ -282,6 +320,7 @@ public class ObjectILParser
             {
                 type.Methods[^1].Flags |= mflags;
                 type.Methods[^1].Access = access;
+                type.Methods[^1].Attributes.AddRange(attributes);
             }
         }
         else if (next.Text == "constructor")
@@ -301,16 +340,17 @@ public class ObjectILParser
             {
                 var pname = ExpectIdentifier();
                 Expect(TokenKind.Colon);
-                var ptype = ExpectIdentifier();
+                var ptype = ReadTypeName();
                 method.Params.Add(new ParameterRecord(
                     mod.StringPool.Add(pname.Text),
-                    mod.StringPool.Add(ptype.Text)));
+                    mod.StringPool.Add(ptype)));
                 TryMatch(TokenKind.Comma);
             }
             Expect(TokenKind.CloseParen);
 
             method.SignatureIndex = method.NameIndex;
             method.ParamCount = (ushort)method.Params.Count;
+            method.Attributes.AddRange(attributes);
             ParseMethodBody(mod, method);
             type.Methods.Add(method);
             type.MethodCount++;
@@ -323,9 +363,45 @@ public class ObjectILParser
         _tokenizer.AdvanceToken();
         var name = ExpectIdentifier();
         Expect(TokenKind.Colon);
-        var typeName = ExpectIdentifier();
-        type.Fields.Add(new FieldRecord(mod.StringPool.Add(name.Text), mod.StringPool.Add(typeName.Text), isStatic));
+        var typeName = ReadTypeName();
+        type.Fields.Add(new FieldRecord(mod.StringPool.Add(name.Text), mod.StringPool.Add(typeName), isStatic));
         type.FieldCount++;
+    }
+
+    /// <summary>
+    /// Reads a type name: an identifier optionally followed by [] array suffixes
+    /// (e.g. "int", "int[]", "string[][]"). Materialized generic names with
+    /// commas inside angle brackets (Pair&lt;int32, string&gt;) split across
+    /// tokens, so the qualified-name joiner is used first. Function types are
+    /// not supported yet.
+    /// </summary>
+    private string ReadTypeName()
+    {
+        var name = ReadQualifiedOperand().Text;
+        while (_tokenizer.PeekToken().Kind == TokenKind.OpenBracket)
+        {
+            _tokenizer.AdvanceToken();
+            Expect(TokenKind.CloseBracket);
+            name += "[]";
+        }
+        return name;
+    }
+
+    /// <summary>
+    /// Records the current `#line` source info for the upcoming bytecode,
+    /// collapsing consecutive instructions that share the same source location.
+    /// </summary>
+    private void RecordSourceLine(MethodRecord method, List<byte> code)
+    {
+        int line = _tokenizer.SourceLine;
+        int col = _tokenizer.SourceColumn;
+        if (method.LineMappings.Count > 0)
+        {
+            var last = method.LineMappings[^1];
+            if (last.Line == line && last.Column == col)
+                return;
+        }
+        method.LineMappings.Add(new SourceMapEntry((uint)code.Count, line, col, _tokenizer.SourceText));
     }
 
     private void ParseMethod(ORBTModule mod, TypeRecord type)
@@ -340,17 +416,17 @@ public class ObjectILParser
         {
             var pname = ExpectIdentifier();
             Expect(TokenKind.Colon);
-            var ptype = ExpectIdentifier();
+            var ptype = ReadTypeName();
             method.Params.Add(new ParameterRecord(
                 mod.StringPool.Add(pname.Text),
-                mod.StringPool.Add(ptype.Text)));
+                mod.StringPool.Add(ptype)));
             TryMatch(TokenKind.Comma);
         }
         Expect(TokenKind.CloseParen);
         method.ParamCount = (ushort)method.Params.Count;
 
         Expect(TokenKind.Arrow);
-        method.SignatureIndex = mod.StringPool.Add(ExpectIdentifier().Text);
+        method.SignatureIndex = mod.StringPool.Add(ReadTypeName());
 
         ParseMethodBody(mod, method);
         type.Methods.Add(method);
@@ -396,8 +472,8 @@ public class ObjectILParser
             _tokenizer.AdvanceToken();
             var lname = ExpectIdentifier();
             Expect(TokenKind.Colon);
-            var ltype = ExpectIdentifier();
-            method.Locals.Add(new LocalRecord(mod.StringPool.Add(lname.Text), mod.StringPool.Add(ltype.Text)));
+            var ltype = ReadTypeName();
+            method.Locals.Add(new LocalRecord(mod.StringPool.Add(lname.Text), mod.StringPool.Add(ltype)));
             method.LocalCount++;
         }
 
@@ -414,10 +490,16 @@ public class ObjectILParser
     {
         if (_tokenizer.PeekToken().Kind is TokenKind.Eof or TokenKind.CloseBrace) return;
 
+        // Record the source mapping before emitting this statement's bytes.
+        // PeekToken() above has already skipped any pending `// #line` comment,
+        // so the tokenizer's SourceLine/SourceColumn/SourceText are current.
+        RecordSourceLine(method, code);
+
         var next = _tokenizer.PeekToken();
 
         if (next.Text == "if") { _tokenizer.AdvanceToken(); ParseIf(mod, method, code); return; }
         if (next.Text == "while") { _tokenizer.AdvanceToken(); ParseWhile(mod, method, code); return; }
+        if (next.Text == "switch") { _tokenizer.AdvanceToken(); ParseSwitch(mod, method, code); return; }
 
         if (next.Text == "break")
         {
@@ -530,6 +612,107 @@ public class ObjectILParser
         PlaceLabel(endLabel, code);
     }
 
+    /// <summary>
+    /// Parses a structured <c>switch (stack) { case N: / case "s": / case else: }</c>
+    /// block and lowers it to flat bytecode. The switch expression is already on
+    /// the stack. Per case: dup + load case value + ceq + brfalse to a label
+    /// placed AFTER the case body; the body pops the dup'd value and branches to
+    /// the switch end. The value is consumed exactly once on every path.
+    /// </summary>
+    private void ParseSwitch(ORBTModule mod, MethodRecord method, List<byte> code)
+    {
+        Expect(TokenKind.OpenParen);
+        var cond = ExpectIdentifier();
+        if (cond.Text != "stack") throw new FormatException($"Expected 'stack' condition in switch at {cond.Line}");
+        Expect(TokenKind.CloseParen);
+        Expect(TokenKind.OpenBrace);
+
+        int endLabel = FreshLabel();
+        _breakTargets.Push(endLabel);
+
+        bool sawElse = false;
+
+        while (_tokenizer.PeekToken().Kind != TokenKind.CloseBrace
+               && _tokenizer.PeekToken().Kind != TokenKind.Eof)
+        {
+            var header = _tokenizer.PeekToken();
+            if (header.Text != "case")
+                throw new FormatException($"Expected 'case' in switch at {header.Line}, got '{header.Text}'");
+            _tokenizer.AdvanceToken();
+
+            var valTok = _tokenizer.AdvanceToken();
+            var colon = _tokenizer.AdvanceToken();
+            if (colon.Text != ":") throw new FormatException($"Expected ':' after case at {colon.Line}");
+
+            if (valTok.Text == "else")
+            {
+                if (sawElse) throw new FormatException("Duplicate else in switch");
+                sawElse = true;
+                // Drop the switch value, then the else body runs inline.
+                code.Add(0x23); // pop
+                method.InstrCount++;
+                while (_tokenizer.PeekToken().Kind != TokenKind.CloseBrace
+                       && _tokenizer.PeekToken().Kind != TokenKind.Eof
+                       && _tokenizer.PeekToken().Text != "case")
+                    ParseStatement(mod, method, code);
+                continue;
+            }
+
+            if (sawElse)
+                throw new FormatException("Case after else in switch");
+
+            int notLabel = FreshLabel();
+
+            // Compare the dup'd switch value against this case's value.
+            code.Add(0x22); // dup
+            if (valTok.Kind == TokenKind.Integer)
+            {
+                code.Add(0x2B); // ldc.i4
+                EmitI32(code, int.Parse(valTok.Text));
+            }
+            else if (valTok.Kind == TokenKind.String)
+            {
+                code.Add(0x02); // ldstr
+                EmitU16(code, mod.StringPool.Add(valTok.Text));
+            }
+            else
+            {
+                throw new FormatException($"Invalid switch case value '{valTok.Text}' at {valTok.Line}");
+            }
+            code.Add(0x0D); // ceq
+            code.Add(0x34); // brfalse → notLabel
+            _fixups.Add(new PendingBranch(code.Count, notLabel));
+            EmitI32(code, 0);
+            method.InstrCount += 4; // dup, load, ceq, brfalse
+
+            // Case body: drop the dup'd value, run the body, jump to end.
+            code.Add(0x23); // pop
+            while (_tokenizer.PeekToken().Kind != TokenKind.CloseBrace
+                   && _tokenizer.PeekToken().Kind != TokenKind.Eof
+                   && _tokenizer.PeekToken().Text != "case")
+                ParseStatement(mod, method, code);
+            code.Add(0x32); // br → end
+            _fixups.Add(new PendingBranch(code.Count, endLabel));
+            EmitI32(code, 0);
+            method.InstrCount += 2; // pop, br
+
+            // Fall-through point for the next case's comparison.
+            PlaceLabel(notLabel, code);
+        }
+
+        Expect(TokenKind.CloseBrace);
+
+        if (!sawElse)
+        {
+            // No case matched and no else — drop the switch value.
+            code.Add(0x23); // pop
+            method.InstrCount++;
+        }
+
+        _breakTargets.Pop();
+        PlaceLabel(endLabel, code);
+    }
+
     private void ParseSimpleInstruction(ORBTModule mod, MethodRecord method, List<byte> code)
     {
         var mnemonic = ExpectIdentifier();
@@ -562,7 +745,9 @@ public class ObjectILParser
                 && _tokenizer.PeekToken().Kind != TokenKind.OpenBrace
                 && _tokenizer.PeekToken().Line == mnLine)
             {
-                nameIdx = mod.StringPool.Add(_tokenizer.AdvanceToken().Text);
+                // ReadQualifiedOperand joins multi-token generic names
+                // (Pair<int32, string>..ctor), keeping the ", " separator.
+                nameIdx = mod.StringPool.Add(ReadQualifiedOperand().Text);
 
                 if (_tokenizer.PeekToken().Kind == TokenKind.OpenParen)
                 {
@@ -600,16 +785,72 @@ public class ObjectILParser
             && _tokenizer.PeekToken().Kind != TokenKind.OpenBrace
             && _tokenizer.PeekToken().Line == mnLine)
         {
-            var operand = _tokenizer.AdvanceToken();
+            var operand = ReadQualifiedOperand();
+            // Field references are qualified as "Type::field" in the text IR —
+            // join the three tokens so the operand is the full field reference.
+            // ModuleCompiler keys fields as "Type.field" (dot), so normalize.
+            if (opcode is 0x0F or 0x2A or 0x10 or 0x11 // ldfld, stfld, ldsfld, stsfld
+                && _tokenizer.PeekToken().Kind == TokenKind.DoubleColon
+                && _tokenizer.PeekToken().Line == mnLine)
+            {
+                _tokenizer.AdvanceToken(); // ::
+                var fieldTok = _tokenizer.AdvanceToken();
+                operand = new Token(TokenKind.Identifier, operand.Text + "." + fieldTok.Text, operand.Line, operand.Col);
+            }
             operandRead = EncodeOperand(mod, code, opcode, operand);
             if (!operandRead)
             {
                 while (_tokenizer.PeekToken().Kind != TokenKind.Eof && _tokenizer.PeekToken().Line == mnLine)
                     _tokenizer.AdvanceToken();
             }
+            else if (opcode == 0x12)
+            {
+                // newobj: consume the trailing ".constructor(...)" suffix so it
+                // doesn't leak into the next statement.
+                while (_tokenizer.PeekToken().Kind != TokenKind.Eof
+                       && _tokenizer.PeekToken().Kind != TokenKind.CloseBrace
+                       && _tokenizer.PeekToken().Line == mnLine)
+                    _tokenizer.AdvanceToken();
+            }
         }
 
         method.InstrCount++;
+    }
+
+    /// <summary>
+    /// Reads one operand token, joining additional tokens while angle brackets
+    /// are unbalanced. Materialized generic type names contain commas inside
+    /// their angle brackets (<c>Pair&lt;int32, string&gt;</c>), and the
+    /// tokenizer stops identifiers at <c>,</c>, so the name splits across
+    /// tokens (<c>Pair&lt;int32</c> <c>,</c> <c>string&gt;.ctor</c>). Joining
+    /// with the comma separator (", ") reconstructs the exact wire name the
+    /// compiler emitted.
+    /// </summary>
+    private Token ReadQualifiedOperand()
+    {
+        var t = _tokenizer.AdvanceToken();
+        int angleDepth = CountAngles(t.Text);
+        while (angleDepth > 0
+               && _tokenizer.PeekToken().Kind is not (TokenKind.Eof or TokenKind.CloseBrace)
+               && _tokenizer.PeekToken().Line == t.Line)
+        {
+            var next = _tokenizer.AdvanceToken();
+            string sep = next.Text == "," ? ", " : "";
+            t = new Token(t.Kind, t.Text + sep + next.Text, t.Line, t.Col);
+            angleDepth += CountAngles(next.Text);
+        }
+        return t;
+    }
+
+    private static int CountAngles(string s)
+    {
+        int d = 0;
+        foreach (var ch in s)
+        {
+            if (ch == '<') d++;
+            else if (ch == '>') d--;
+        }
+        return d;
     }
 
     // ── Operand encoding ────────────────────────────────────────────
@@ -649,7 +890,6 @@ public class ObjectILParser
             case 0x03: case 0x04: // ldarg, starg
             case 0x05: case 0x06: // ldloc, stloc
             case 0x02:            // ldstr
-            case 0x12: case 0x13: // newobj, newarr
             case 0x1F: case 0x20: case 0x21: // conv, castclass, isinst
             case 0x0F: case 0x2A: // ldfld, stfld
             case 0x10: case 0x11: // ldsfld, stsfld
@@ -660,6 +900,19 @@ public class ObjectILParser
                 else
                     idx = mod.StringPool.Add(operand.Text);
                 EmitU16(code, idx);
+                return true;
+            }
+            case 0x12: case 0x13: // newobj, newarr
+            {
+                // Dotted identifiers include the ctor suffix: "Delegate.constructor".
+                // Strip it so the type resolves ("Delegate").
+                string name = operand.Text;
+                if (opcode == 0x12)
+                {
+                    int ci = name.IndexOf(".constructor", StringComparison.Ordinal);
+                    if (ci >= 0) name = name[..ci];
+                }
+                EmitU16(code, mod.StringPool.Add(name));
                 return true;
             }
             case 0x32: case 0x33: case 0x34: // br, brtrue, brfalse

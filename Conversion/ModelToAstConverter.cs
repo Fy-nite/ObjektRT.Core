@@ -394,6 +394,7 @@ public sealed class ModelToAstConverter
             case Opcode.Newobj: ast = OpCode.Newobj; return true;
             case Opcode.Newarr: ast = OpCode.Newarr; return true;
             case Opcode.Ldelem: ast = OpCode.Ldelem; return true;
+            case Opcode.Ldlen: ast = OpCode.Ldlen; return true;
             case Opcode.Stelem: ast = OpCode.Stelem; return true;
             case Opcode.Call: ast = OpCode.Call; return true;
             case Opcode.Callvirt: ast = OpCode.Callvirt; return true;
