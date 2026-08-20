@@ -47,6 +47,9 @@ public sealed class AstToModelConverter
     private readonly List<(int BytePos, int LabelId)> _fixups = new();
     private readonly Dictionary<int, int> _labelPos = new();
     private int _nextLabelId;
+    private Dictionary<string, ushort> _argNameToPos = new();
+    private Dictionary<string, ushort> _localNameToPos = new();
+    private bool _inEmbeddedBlock;
 
     // ── Public API ────────────────────────────────────────────────────
 
@@ -227,6 +230,16 @@ public sealed class AstToModelConverter
         CollectLocals(body, method, seen);
         method.LocalCount = (ushort)method.Locals.Count;
 
+        // Build name→position maps so embedded sub-blocks (try/catch/finally)
+        // can resolve local/arg references to positional indices without going
+        // through ModuleCompiler's post-pass name resolution.
+        _argNameToPos = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (ushort i = 0; i < method.Params.Count; i++)
+            _argNameToPos[_mod.Resolve(method.Params[i].NameIndex)] = i;
+        _localNameToPos = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (ushort i = 0; i < method.Locals.Count; i++)
+            _localNameToPos[_mod.Resolve(method.Locals[i].NameIndex)] = i;
+
         EmitStatements(body.Statements);
 
         ResolveFixups();
@@ -256,6 +269,13 @@ public sealed class AstToModelConverter
                     foreach (var c in sw.Cases)
                         CollectLocals(c.Body, method, seen);
                     break;
+                case TryStatement tryStmt:
+                    CollectLocals(tryStmt.TryBlock, method, seen);
+                    foreach (var c in tryStmt.CatchClauses)
+                        CollectLocals(c.Body, method, seen);
+                    if (tryStmt.FinallyBlock != null)
+                        CollectLocals(tryStmt.FinallyBlock, method, seen);
+                    break;
             }
         }
     }
@@ -276,6 +296,12 @@ public sealed class AstToModelConverter
                     break;
                 case SwitchStatement:
                     throw new NotSupportedException("switch statements have no ORBT wire encoding");
+                case TryStatement tryStmt:
+                    EmitTry(tryStmt);
+                    break;
+                case ThrowStatement throwStmt:
+                    EmitThrow(throwStmt);
+                    break;
                 case InstructionStatement inst:
                     EmitInstruction(inst.Instruction);
                     break;
@@ -325,6 +351,91 @@ public sealed class AstToModelConverter
 
         EmitBranch((byte)Opcode.Br, loopLabel);
         PlaceLabel(endLabel);
+    }
+
+    /// <summary>
+    /// Lowers TryStatement to a Try opcode with embedded sub-bytecodes for the
+    /// try body, each catch body, and the optional finally body.
+    /// Wire format: U32 tryLen, tryBlock[tryLen], U16 catchCount,
+    ///   { U16 typeIdx, U32 bodyLen, body[bodyLen] }*catchCount,
+    ///   U8 hasFinally, [U32 finallyLen, finallyBlock[finallyLen]]
+    /// </summary>
+    private void EmitTry(TryStatement tryStmt)
+    {
+        EmitOpcode(Opcode.Try);
+
+        // Save and compile the try block as embedded bytecode
+        var tryBytes = CompileSubBlock(tryStmt.TryBlock);
+        EmitI32(tryBytes.Length);
+        _code.AddRange(tryBytes);
+
+        // Catch records
+        EmitU16((ushort)tryStmt.CatchClauses.Count);
+        foreach (var catchClause in tryStmt.CatchClauses)
+        {
+            ushort typeIdx = 0;
+            if (catchClause.ExceptionType != null)
+                typeIdx = Intern(catchClause.ExceptionType);
+            EmitU16(typeIdx);
+
+            var catchBytes = CompileSubBlock(catchClause.Body);
+            EmitI32(catchBytes.Length);
+            _code.AddRange(catchBytes);
+        }
+
+        // Finally block
+        bool hasFinally = tryStmt.FinallyBlock != null;
+        EmitU8(hasFinally ? (byte)1 : (byte)0);
+        if (hasFinally)
+        {
+            var finBytes = CompileSubBlock(tryStmt.FinallyBlock!);
+            EmitI32(finBytes.Length);
+            _code.AddRange(finBytes);
+        }
+    }
+
+    private void EmitThrow(ThrowStatement throwStmt)
+    {
+        if (throwStmt.Value != null)
+            EmitStatements(new[] { throwStmt.Value });
+        EmitOpcode(Opcode.Throw);
+    }
+
+    /// <summary>
+    /// Compiles a block of statements into a standalone byte array, saving and
+    /// restoring the emitter state so nested blocks don't interfere.
+    /// </summary>
+    private byte[] CompileSubBlock(BlockStatement block)
+    {
+        // Save emitter state
+        var savedCode = _code;
+        var savedInstrCount = _instrCount;
+        var savedFixups = new List<(int, int)>(_fixups);
+        var savedLabelPos = new Dictionary<int, int>(_labelPos);
+        int savedNextLabel = _nextLabelId;
+
+        _code = new List<byte>();
+        _instrCount = 0;
+        _fixups.Clear();
+        _labelPos.Clear();
+        _nextLabelId = 0;
+        _inEmbeddedBlock = true;
+
+        EmitStatements(block.Statements);
+        ResolveFixups();
+        var result = _code.ToArray();
+
+        // Restore emitter state
+        _code = savedCode;
+        _instrCount = savedInstrCount;
+        _fixups.Clear();
+        _fixups.AddRange(savedFixups);
+        _labelPos.Clear();
+        foreach (var kv in savedLabelPos) _labelPos[kv.Key] = kv.Value;
+        _nextLabelId = savedNextLabel;
+        _inEmbeddedBlock = false;
+
+        return result;
     }
 
     private void EmitInstruction(AST.Instruction instruction)
@@ -390,10 +501,6 @@ public sealed class AstToModelConverter
             case Opcode.Ldstr:
             case Opcode.Newobj:
             case Opcode.Newarr:
-            case Opcode.Ldarg:
-            case Opcode.Starg:
-            case Opcode.Ldloc:
-            case Opcode.Stloc:
             case Opcode.Ldfld:
             case Opcode.Stfld:
             case Opcode.Ldsfld:
@@ -402,6 +509,32 @@ public sealed class AstToModelConverter
             case Opcode.Castclass:
             case Opcode.Isinst:
                 EmitU16(InternOrIndex(simple.Operand));
+                break;
+
+            case Opcode.Ldarg:
+            case Opcode.Starg:
+                if (_inEmbeddedBlock && simple.Operand != null
+                    && _argNameToPos.TryGetValue(simple.Operand, out var argPos))
+                {
+                    EmitU16(argPos);
+                }
+                else
+                {
+                    EmitU16(InternOrIndex(simple.Operand));
+                }
+                break;
+
+            case Opcode.Ldloc:
+            case Opcode.Stloc:
+                if (_inEmbeddedBlock && simple.Operand != null
+                    && _localNameToPos.TryGetValue(simple.Operand, out var localPos))
+                {
+                    EmitU16(localPos);
+                }
+                else
+                {
+                    EmitU16(InternOrIndex(simple.Operand));
+                }
                 break;
 
             case Opcode.If:

@@ -248,6 +248,22 @@ public sealed record SwitchStatement(
     List<SwitchCase> Cases
 ) : Statement;
 
+public sealed record CatchClause(
+    string? ExceptionType,
+    string ExceptionVar,
+    BlockStatement Body
+) : AstNode;
+
+public sealed record TryStatement(
+    BlockStatement TryBlock,
+    List<CatchClause> CatchClauses,
+    BlockStatement? FinallyBlock
+) : Statement;
+
+public sealed record ThrowStatement(
+    Statement? Value = null
+) : Statement;
+
 public abstract record Instruction : AstNode;
 
 public sealed record SimpleInstruction(

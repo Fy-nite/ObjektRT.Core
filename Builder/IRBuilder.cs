@@ -526,6 +526,65 @@ public sealed class InstructionBuilder
     }
 
     public MethodBuilder EndBody() => _methodBuilder;
+
+    public InstructionBuilder Try(Action<InstructionBuilder> tryBody, Action<TryBuilder>? catchBuilder = null, Action<InstructionBuilder>? finallyBody = null)
+    {
+        var tryStatements = new List<Statement>();
+        var tryB = new InstructionBuilder(_methodBuilder, tryStatements) { _currentLocation = _currentLocation };
+        tryBody(tryB);
+        var tryBlock = new BlockStatement(tryStatements) { Location = _currentLocation };
+
+        var catches = new List<CatchClause>();
+        BlockStatement? finallyBlock = null;
+
+        if (catchBuilder != null)
+        {
+            var tb = new TryBuilder(_methodBuilder, _currentLocation);
+            catchBuilder(tb);
+            catches.AddRange(tb.Clauses);
+        }
+
+        if (finallyBody != null)
+        {
+            var finStatements = new List<Statement>();
+            var finB = new InstructionBuilder(_methodBuilder, finStatements) { _currentLocation = _currentLocation };
+            finallyBody(finB);
+            finallyBlock = new BlockStatement(finStatements) { Location = _currentLocation };
+        }
+
+        var tryStmt = new TryStatement(tryBlock, catches, finallyBlock) { Location = _currentLocation };
+        _statements.Add(tryStmt);
+        return this;
+    }
+
+    public InstructionBuilder Throw(Statement? value = null)
+    {
+        var throwStmt = new ThrowStatement(value) { Location = _currentLocation };
+        _statements.Add(throwStmt);
+        return this;
+    }
+}
+
+public sealed class TryBuilder
+{
+    private readonly MethodBuilder _methodBuilder;
+    private readonly SourceLocation? _location;
+    public List<CatchClause> Clauses { get; } = new();
+
+    internal TryBuilder(MethodBuilder methodBuilder, SourceLocation? location)
+    {
+        _methodBuilder = methodBuilder;
+        _location = location;
+    }
+
+    public TryBuilder Catch(string? exceptionType, string exceptionVar, Action<InstructionBuilder> body)
+    {
+        var bodyStatements = new List<Statement>();
+        var bodyBuilder = new InstructionBuilder(_methodBuilder, bodyStatements) { _currentLocation = _location };
+        body(bodyBuilder);
+        Clauses.Add(new CatchClause(exceptionType, exceptionVar, new BlockStatement(bodyStatements) { Location = _location }) { Location = _location });
+        return this;
+    }
 }
 
 public sealed class SwitchBuilder

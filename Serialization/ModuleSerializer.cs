@@ -275,6 +275,29 @@ public sealed class ModuleSerializer
                 }
                 sb.AppendLine($"{ind}}}");
             }
+            else if (stmt is TryStatement tryStmt)
+            {
+                sb.AppendLine($"{ind}try {{");
+                DumpBlockAsIRCode(sb, tryStmt.TryBlock, indentLevel + 1);
+                sb.AppendLine($"{ind}}}");
+                foreach (var cc in tryStmt.CatchClauses)
+                {
+                    var typePart = cc.ExceptionType != null ? $"{cc.ExceptionType} " : "";
+                    sb.AppendLine($"{ind}catch {typePart}{cc.ExceptionVar} {{");
+                    DumpBlockAsIRCode(sb, cc.Body, indentLevel + 1);
+                    sb.AppendLine($"{ind}}}");
+                }
+                if (tryStmt.FinallyBlock != null)
+                {
+                    sb.AppendLine($"{ind}finally {{");
+                    DumpBlockAsIRCode(sb, tryStmt.FinallyBlock, indentLevel + 1);
+                    sb.AppendLine($"{ind}}}");
+                }
+            }
+            else if (stmt is ThrowStatement throwStmt)
+            {
+                sb.AppendLine($"{ind}throw");
+            }
         }
     }
 

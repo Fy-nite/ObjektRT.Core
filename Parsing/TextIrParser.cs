@@ -530,6 +530,18 @@ public static class TextIrParser
                 continue;
             }
 
+            if (line.Equals("try", StringComparison.OrdinalIgnoreCase))
+            {
+                statements.Add(ParseTry(reader));
+                continue;
+            }
+
+            if (line.Equals("throw", StringComparison.OrdinalIgnoreCase))
+            {
+                statements.Add(new ThrowStatement());
+                continue;
+            }
+
             statements.Add(new InstructionStatement(ParseInstruction(line)));
         }
 
@@ -641,6 +653,51 @@ public static class TextIrParser
         var condition = ExtractCondition(line, "while");
         var body = ParseBlock(reader);
         return new WhileStatement(condition, body);
+    }
+
+    /// <summary>
+    /// Parses a try/catch/finally block. Expected token layout:
+    ///   try { ... } catch [Type] var { ... } [finally { ... }]
+    /// </summary>
+    private static TryStatement ParseTry(TokenReader reader)
+    {
+        var tryBlock = ParseBlock(reader);
+        var clauses = new List<CatchClause>();
+
+        while (!reader.IsAtEnd && reader.PeekIs("catch"))
+        {
+            reader.ReadLine(); // consume "catch"
+            string? excType = null;
+            string excVar;
+            if (reader.PeekIs("{"))
+            {
+                excVar = "e";
+            }
+            else
+            {
+                var first = reader.ReadLine();
+                if (reader.PeekIs("{"))
+                {
+                    excVar = first;
+                }
+                else
+                {
+                    excType = first;
+                    excVar = reader.ReadLine();
+                }
+            }
+            var body = ParseBlock(reader);
+            clauses.Add(new CatchClause(excType, excVar, body));
+        }
+
+        BlockStatement? finallyBlock = null;
+        if (!reader.IsAtEnd && reader.PeekIs("finally"))
+        {
+            reader.ReadLine(); // consume "finally"
+            finallyBlock = ParseBlock(reader);
+        }
+
+        return new TryStatement(tryBlock, clauses, finallyBlock);
     }
 
     private static string ExtractCondition(string line, string keyword)

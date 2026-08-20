@@ -501,6 +501,10 @@ public class ObjectILParser
         if (next.Text == "while") { _tokenizer.AdvanceToken(); ParseWhile(mod, method, code); return; }
         if (next.Text == "switch") { _tokenizer.AdvanceToken(); ParseSwitch(mod, method, code); return; }
 
+        if (next.Text == "try") { _tokenizer.AdvanceToken(); ParseTry(mod, method, code); return; }
+
+        if (next.Text == "throw") { _tokenizer.AdvanceToken(); code.Add(0x1E); method.InstrCount++; return; }
+
         if (next.Text == "break")
         {
             _tokenizer.AdvanceToken();
@@ -711,6 +715,228 @@ public class ObjectILParser
 
         _breakTargets.Pop();
         PlaceLabel(endLabel, code);
+    }
+
+    /// <summary>
+    /// Parses a structured <c>try { ... } catch ... { ... } [finally { ... }]</c>
+    /// block into a single Try opcode with embedded sub-bytecodes.
+    /// </summary>
+    private void ParseTry(ORBTModule mod, MethodRecord method, List<byte> code)
+    {
+        // try body
+        var tryBody = ParseEmbeddedBlock(mod, method);
+        var catchBodies = new List<byte[]>();
+        var catchTypes = new List<ushort>();
+
+        while (_tokenizer.PeekToken().Text == "catch")
+        {
+            _tokenizer.AdvanceToken(); // consume 'catch'
+            string? typeName = null;
+            string varName = "e";
+            var tok = _tokenizer.PeekToken();
+            if (tok.Text == "{")
+            {
+                // catch { ... } — bare catch-all
+                varName = "e";
+            }
+            else
+            {
+                var first = _tokenizer.AdvanceToken();
+                if (_tokenizer.PeekToken().Text == "{")
+                {
+                    // catch var { ... }
+                    varName = first.Text;
+                }
+                else
+                {
+                    // catch Type var { ... }
+                    typeName = first.Text;
+                    varName = _tokenizer.AdvanceToken().Text;
+                }
+            }
+            catchTypes.Add(typeName != null ? (ushort)mod.StringPool.Add(typeName) : (ushort)0);
+            catchBodies.Add(ParseEmbeddedBlock(mod, method));
+        }
+
+        byte[]? finallyBody = null;
+        if (_tokenizer.PeekToken().Text == "finally")
+        {
+            _tokenizer.AdvanceToken(); // consume 'finally'
+            finallyBody = ParseEmbeddedBlock(mod, method);
+        }
+
+        // Emit the Try opcode
+        code.Add(0x1D); // try
+        EmitU32(code, (uint)tryBody.Length);
+        code.AddRange(tryBody);
+        EmitU16(code, (ushort)catchBodies.Count);
+        for (int i = 0; i < catchBodies.Count; i++)
+        {
+            EmitU16(code, catchTypes[i]);
+            EmitU32(code, (uint)catchBodies[i].Length);
+            code.AddRange(catchBodies[i]);
+        }
+        code.Add(finallyBody != null ? (byte)1 : (byte)0);
+        if (finallyBody != null)
+        {
+            EmitU32(code, (uint)finallyBody.Length);
+            code.AddRange(finallyBody);
+        }
+        method.InstrCount++;
+    }
+
+    /// <summary>
+    /// Parses a braced block of statements into a standalone byte array,
+    /// saving/restoring the emitter state so nested labels don't leak.
+    /// </summary>
+    private byte[] ParseEmbeddedBlock(ORBTModule mod, MethodRecord method)
+    {
+        var savedFixups = new List<PendingBranch>(_fixups);
+        var savedLabels = new Dictionary<int, LabelSlot>(_labels);
+        int savedNextLabel = _nextLabelId;
+        uint savedInstrCount = method.InstrCount;
+
+        _fixups.Clear();
+        _labels.Clear();
+        _nextLabelId = 0;
+        method.InstrCount = 0;
+
+        var body = new List<byte>();
+        Expect(TokenKind.OpenBrace);
+        while (_tokenizer.PeekToken().Kind != TokenKind.CloseBrace && _tokenizer.PeekToken().Kind != TokenKind.Eof)
+            ParseStatement(mod, method, body);
+        Expect(TokenKind.CloseBrace);
+        ResolveFixups(body);
+
+        // Embedded blocks bypass ModuleCompiler's name→position resolution,
+        // so rewrite local/arg references to positional indices in-place.
+        ResolveEmbeddedLocals(mod, method, body);
+
+        var result = body.ToArray();
+
+        _fixups.Clear();
+        _fixups.AddRange(savedFixups);
+        _labels.Clear();
+        foreach (var kv in savedLabels) _labels[kv.Key] = kv.Value;
+        _nextLabelId = savedNextLabel;
+        method.InstrCount = savedInstrCount;
+
+        return result;
+    }
+
+    /// <summary>
+    /// Rewrites ldloc/stloc/ldarg/starg operands in an embedded block from
+    /// string-pool indices to positional indices, mirroring ModuleCompiler's
+    /// main-body resolution. Single-byte opcodes; operand at offset+1 (U16).
+    /// </summary>
+    private static void ResolveEmbeddedLocals(ORBTModule mod, MethodRecord method, List<byte> body)
+    {
+        var argNameToPos = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (ushort i = 0; i < method.Params.Count; i++)
+            argNameToPos[mod.Resolve(method.Params[i].NameIndex)] = i;
+        var localNameToPos = new Dictionary<string, ushort>(StringComparer.Ordinal);
+        for (ushort i = 0; i < method.Locals.Count; i++)
+            localNameToPos[mod.Resolve(method.Locals[i].NameIndex)] = i;
+
+        for (int i = 0; i < body.Count; )
+        {
+            int op = body[i];
+            if (op is 0x03 or 0x04) // ldarg, starg
+            {
+                if (i + 2 >= body.Count) break;
+                ushort idx = (ushort)(body[i + 1] | (body[i + 2] << 8));
+                if (idx < mod.StringPool.Count)
+                {
+                    string name = mod.Resolve(idx);
+                    if (argNameToPos.TryGetValue(name, out var pos))
+                    {
+                        body[i + 1] = (byte)(pos & 0xFF);
+                        body[i + 2] = (byte)(pos >> 8);
+                    }
+                }
+                i += 3;
+            }
+            else if (op is 0x05 or 0x06) // ldloc, stloc
+            {
+                if (i + 2 >= body.Count) break;
+                ushort idx = (ushort)(body[i + 1] | (body[i + 2] << 8));
+                if (idx < mod.StringPool.Count)
+                {
+                    string name = mod.Resolve(idx);
+                    if (localNameToPos.TryGetValue(name, out var pos))
+                    {
+                        body[i + 1] = (byte)(pos & 0xFF);
+                        body[i + 2] = (byte)(pos >> 8);
+                    }
+                }
+                i += 3;
+            }
+            else if (op is 0x19 or 0x1A) // if, while — skip condition encoding
+            {
+                if (i + 1 >= body.Count) break;
+                int kind = body[i + 1];
+                int skip = 2; // opcode byte + kind byte
+                if (kind == 1) skip += 1;        // binary comparison byte
+                else if (kind >= 2)              // embedded expression/block bytes
+                {
+                    if (i + 2 + 4 > body.Count) break;
+                    uint len = (uint)(body[i + 2] | (body[i + 3] << 8) | (body[i + 4] << 16) | (body[i + 5] << 24));
+                    skip += 4 + (int)len;
+                }
+                i += skip;
+            }
+            else if (op is 0x1D) // try — skip the full embedded handler structure
+            {
+                if (i + 1 + 4 > body.Count) break;
+                int p = i + 1;
+                uint tryLen = ReadU32(body, p); p += 4 + (int)tryLen;
+                if (p + 2 > body.Count) break;
+                int catchCount = body[p] | (body[p + 1] << 8); p += 2;
+                for (int c = 0; c < catchCount; c++)
+                {
+                    if (p + 2 > body.Count) break;
+                    p += 2; // type index
+                    if (p + 4 > body.Count) break;
+                    uint blen = ReadU32(body, p); p += 4 + (int)blen;
+                }
+                if (p >= body.Count) break;
+                if (body[p] != 0)
+                {
+                    p++;
+                    if (p + 4 > body.Count) break;
+                    uint flen = ReadU32(body, p); p += 4 + (int)flen;
+                }
+                else p++;
+                i = p;
+            }
+            else
+            {
+                i += 1 + OperandSize(mod, op, body, i);
+            }
+        }
+    }
+
+    private static uint ReadU32(List<byte> b, int p) =>
+        (uint)(b[p] | (b[p + 1] << 8) | (b[p + 2] << 16) | (b[p + 3] << 24));
+
+    /// <summary>Returns the operand byte size for a single-byte opcode (0 when none).</summary>
+    private static int OperandSize(ORBTModule mod, int op, List<byte> body, int i)
+    {
+        switch (op)
+        {
+            case 0x02: case 0x03: case 0x04: case 0x05: case 0x06: // ldstr, ldarg, starg, ldloc, stloc
+            case 0x0F: case 0x2A: case 0x10: case 0x11:            // ldfld, stfld, ldsfld, stsfld
+            case 0x12: case 0x13:                                  // newobj, newarr
+            case 0x1F: case 0x20: case 0x21:                       // conv, castclass, isinst
+                return 2;
+            case 0x01: case 0x2B: return 4;                        // ldc, ldc.i4
+            case 0x2C: return 8;                                   // ldc.i8
+            case 0x2D: return 4;                                   // ldc.r4
+            case 0x2E: return 8;                                   // ldc.r8
+            case 0x16: case 0x17: case 0x35: return 4;             // call, callvirt, callnative
+            case 0x32: case 0x33: case 0x34: return 4;             // br, brtrue, brfalse
+            default: return 0;
+        }
     }
 
     private void ParseSimpleInstruction(ORBTModule mod, MethodRecord method, List<byte> code)
@@ -956,7 +1182,15 @@ public class ObjectILParser
         code[pos + 3] = (byte)((val >> 24) & 0xFF);
     }
 
-    private static void EmitI32(List<byte> code, int val)
+private static void EmitI32(List<byte> code, int val)
+    {
+        code.Add((byte)(val & 0xFF));
+        code.Add((byte)((val >> 8) & 0xFF));
+        code.Add((byte)((val >> 16) & 0xFF));
+        code.Add((byte)((val >> 24) & 0xFF));
+    }
+
+    private static void EmitU32(List<byte> code, uint val)
     {
         code.Add((byte)(val & 0xFF));
         code.Add((byte)((val >> 8) & 0xFF));
