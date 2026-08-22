@@ -29,6 +29,20 @@ public class ObjectILParser
 
         while (_tokenizer.PeekToken().Kind != TokenKind.Eof)
             ParseTypeDecl(mod);
+
+        ResolveDeferredBases(mod);
+    }
+
+    // Bases may be declared after their derived types (forward references);
+    // resolution happens once every type is known. Names that never resolve
+    // stay -1 (external bases cannot be indexed).
+    private readonly List<(TypeRecord Type, string BaseName)> _pendingBases = new();
+
+    private void ResolveDeferredBases(ORBTModule mod)
+    {
+        foreach (var (type, baseName) in _pendingBases)
+            type.BaseTypeIndex = FindTypeIndex(mod, baseName);
+        _pendingBases.Clear();
     }
 
     // ── Parsing helpers ─────────────────────────────────────────────
@@ -236,10 +250,10 @@ public class ObjectILParser
                 var baseName = ExpectIdentifier().Text;
                 if (first)
                 {
-                    // The first entry is the base type when it resolves to a
-                    // type declared in this module; otherwise it is treated as
-                    // an interface reference (external bases cannot be indexed).
-                    type.BaseTypeIndex = FindTypeIndex(mod, baseName);
+                    // The first entry is the base type. Deferred: it may be
+                    // declared later in the module, so resolution waits until
+                    // every type is parsed (ResolveDeferredBases).
+                    _pendingBases.Add((type, baseName));
                     first = false;
                 }
                 else
