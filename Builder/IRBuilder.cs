@@ -480,6 +480,8 @@ public sealed class InstructionBuilder
     // Stack
     public InstructionBuilder Dup() => Emit(OpCode.Dup);
     public InstructionBuilder Pop() => Emit(OpCode.Pop);
+    
+    public InstructionBuilder Isinst(string typeName) => Emit(OpCode.Isinst, typeName);
 
     // Control flow
     public InstructionBuilder Ret() => Emit(OpCode.Ret);
