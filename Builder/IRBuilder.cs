@@ -102,6 +102,17 @@ public sealed class ClassBuilder
         return this;
     }
 
+    /// <summary>Attaches an annotation with named arguments to the class.</summary>
+    public ClassBuilder Attribute(string name, string[] positionalArgs, Dictionary<string, string>? namedArgs)
+    {
+        var attr = new AttributeNode(name, positionalArgs);
+        if (namedArgs != null)
+            foreach (var kv in namedArgs)
+                attr.NamedArguments[kv.Key] = kv.Value;
+        _class.Attributes.Add(attr);
+        return this;
+    }
+
     public ClassBuilder Generic(params string[] parameters)
     {
         foreach (var param in parameters)
@@ -206,6 +217,17 @@ public sealed class StructBuilder
         return this;
     }
 
+    /// <summary>Attaches an annotation with named arguments to the struct.</summary>
+    public StructBuilder Attribute(string name, string[] positionalArgs, Dictionary<string, string>? namedArgs)
+    {
+        var attr = new AttributeNode(name, positionalArgs);
+        if (namedArgs != null)
+            foreach (var kv in namedArgs)
+                attr.NamedArguments[kv.Key] = kv.Value;
+        _struct.Attributes.Add(attr);
+        return this;
+    }
+
     public IRBuilder EndStruct() => _builder;
 }
 
@@ -293,6 +315,18 @@ public sealed class MethodBuilder
     public MethodBuilder Attribute(string name, params string[] arguments)
     {
         var attr = new AttributeNode(name, arguments);
+        if (_method != null) _method.Attributes.Add(attr);
+        else if (_ctor != null) _ctor.Attributes.Add(attr);
+        return this;
+    }
+
+    /// <summary>Attaches an annotation with named arguments to the method (or constructor).</summary>
+    public MethodBuilder Attribute(string name, string[] positionalArgs, Dictionary<string, string>? namedArgs)
+    {
+        var attr = new AttributeNode(name, positionalArgs);
+        if (namedArgs != null)
+            foreach (var kv in namedArgs)
+                attr.NamedArguments[kv.Key] = kv.Value;
         if (_method != null) _method.Attributes.Add(attr);
         else if (_ctor != null) _ctor.Attributes.Add(attr);
         return this;
@@ -433,6 +467,9 @@ public sealed class InstructionBuilder
     public InstructionBuilder Or() => Emit(OpCode.Or);
     public InstructionBuilder Xor() => Emit(OpCode.Xor);
     public InstructionBuilder Not() => Emit(OpCode.Not);
+
+    // Bit shift
+    public InstructionBuilder Shl() => Emit(OpCode.Shl);
 
     // Comparison
     public InstructionBuilder Ceq() => Emit(OpCode.Ceq);

@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using ObjektRT.Core.AST;
 using ObjektRT.Core.Model;
 using ObjektRT.Core.Serialization;
@@ -346,8 +348,14 @@ public sealed class ModelToAstConverter
         {
             var name = _mod.Resolve(nc.StringIndex);
             var (declaring, method) = SplitQualified(name);
-            var argTypes = Enumerable.Repeat(new TypeRef("?"), (int)nc.ParamCount).ToList();
-            var target = new MethodReference(new TypeRef(declaring), method, TypeRef.Void, argTypes);
+            // Prefer the declaring type's stored method signature when it lives
+            // in this module — this recovers the real parameter types, including
+            // the generic type parameter (T) for generic-class methods, instead
+            // of falling back to the placeholder "?". Native/CLR-import calls
+            // (Array.Copy, IO.Println, …) have no in-module declaration, so they
+            // keep the placeholder.
+            var argTypes = ResolveCallParameterTypes(declaring, method, (int)nc.ParamCount, out var returnType);
+            var target = new MethodReference(new TypeRef(declaring), method, returnType, argTypes);
             return new CallInstruction(target, argTypes, instruction.Opcode == Opcode.Callvirt);
         }
 
@@ -359,10 +367,277 @@ public sealed class ModelToAstConverter
         return new SimpleInstruction(ToAst(instruction.Opcode), OperandToText(instruction.Operand));
     }
 
+    /// <summary>True for the two constructor spellings used across the toolchain (.ctor / .constructor).</summary>
+    private static bool IsConstructorName(string name)
+        => name is ".ctor" or ".constructor";
+
+    /// <summary>
+    /// Recovers a constructor's parameter types when the binary stored none.
+    /// Generic classes keep their type parameters as field types (e.g.
+    /// <c>option.Value.v : T</c>, <c>Result.Ok.value : V</c>), so each such
+    /// field yields a corresponding constructor parameter after the implicit
+    /// <c>this</c>. This turns <c>option.Value..ctor(?, ?)</c> into
+    /// <c>option.Value..ctor(object, T)</c> on the round-trip.
+    /// </summary>
+    private List<TypeRef> InferCtorParameterTypes(TypeRecord type, int count)
+    {
+        var argTypes = new List<TypeRef> { new TypeRef("object") }; // implicit this
+
+        var declaredTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in _mod.Types) declaredTypes.Add(ShortNameOf(S(t.NameIndex)));
+
+        foreach (var f in type.Fields)
+        {
+            var ft = S(f.TypeIndex);
+            if (IsGenericParameterName(ft, declaredTypes))
+                argTypes.Add(new TypeRef(ft));
+        }
+
+        while (argTypes.Count < count) argTypes.Add(new TypeRef("?"));
+        if (argTypes.Count > count) argTypes = argTypes.GetRange(0, count);
+        return argTypes;
+    }
+
+    /// <summary>The unqualified (short) name portion of a (possibly dotted) type name.</summary>
+    private static string ShortNameOf(string fullName)
+    {
+        int dot = fullName.LastIndexOf('.');
+        return dot > 0 ? fullName[(dot + 1)..] : fullName;
+    }
+
+    /// <summary>
+    /// A bare, unqualified type name that is neither a built-in nor a type
+    /// declared in this module is treated as a generic type parameter (T, V, E, …).
+    /// </summary>
+    private static bool IsGenericParameterName(string typeName, HashSet<string> declaredTypes)
+    {
+        if (string.IsNullOrEmpty(typeName) || typeName.IndexOf('.') >= 0)
+            return false;
+        if (CtorBuiltinTypeNames.Contains(typeName))
+            return false;
+        return !declaredTypes.Contains(typeName);
+    }
+
+    /// <summary>Built-in primitive type names that must never be treated as generic parameters.</summary>
+    private static readonly HashSet<string> CtorBuiltinTypeNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "int", "string", "bool", "double", "float", "object", "int64", "long", "null", "void",
+        "byte", "sbyte", "short", "ushort", "uint", "int32", "float32", "float64",
+        "uint8", "int8", "int16", "uint16", "uint32", "intptr",
+    };
+
     private static (string Declaring, string Name) SplitQualified(string name)
     {
         int dot = name.LastIndexOf('.');
-        return dot < 0 ? ("", name) : (name[..dot], name[(dot + 1)..]);
+        if (dot < 0) return ("", name);
+        var declaring = name[..dot];
+        var method = name[(dot + 1)..];
+        // The `Type..ctor` / `Type..constructor` convention leaves a trailing
+        // dot on the declaring part (the method name itself starts with a dot).
+        // Strip it so the declaring type resolves correctly.
+        if (declaring.EndsWith('.'))
+        {
+            method = "." + method;
+            declaring = declaring[..^1];
+        }
+        return (declaring, method);
+    }
+
+    /// <summary>
+    /// Recovers the parameter (and return) types for a native call by looking
+    /// the method up in this module's type definitions. The wire format stores
+    /// only the method name + argument count, so without this every native-call
+    /// argument would round-trip as the placeholder <c>"?"</c>. When the callee
+    /// is declared in this module (e.g. a generic-class method such as
+    /// <c>thing.List.Get</c> or <c>ObjektRT.std.option.Value..ctor</c>) the
+    /// stored signature — including the generic type parameter <c>T</c> — is
+    /// used. Calls to external/native bindings that have no in-module
+    /// declaration fall back to the placeholder.
+    /// </summary>
+    private List<TypeRef> ResolveCallParameterTypes(string declaring, string method, int count, out TypeRef returnType)
+    {
+        foreach (var type in _mod.Types)
+        {
+            var typeName = S(type.NameIndex);
+            if (typeName != declaring && !typeName.EndsWith("." + declaring, StringComparison.Ordinal))
+                continue;
+
+            // Collect every method that could be the callee (exact name, or a
+            // constructor pair .ctor/.constructor), then pick the richest one —
+            // the stored newobj target (.constructor) often carries the real
+            // parameter types while the explicit .ctor wrapper has them erased.
+            MethodRecord? best = null;
+            foreach (var m in type.Methods)
+            {
+                var namesMatch = S(m.NameIndex) == method;
+                var bothCtor = IsConstructorName(S(m.NameIndex)) && IsConstructorName(method);
+                if (!namesMatch && !bothCtor)
+                    continue;
+
+                if (best == null || m.Params.Count > best.Params.Count)
+                    best = m;
+            }
+
+            if (best != null)
+            {
+                List<TypeRef> argTypes;
+                if (best.Params.Count > 0)
+                {
+                    argTypes = best.Params
+                        .Select(p => new TypeRef(S(p.TypeIndex)))
+                        .ToList();
+                }
+                else if (IsConstructorName(method))
+                {
+                    // The binary erases constructor parameter metadata, but a
+                    // generic class keeps its type parameters as field types
+                    // (e.g. option.Value.v : T). Recover the constructor's
+                    // parameter types from those fields so the dump shows the
+                    // real T/V/E instead of "?".
+                    argTypes = InferCtorParameterTypes(type, count);
+                }
+                else
+                {
+                    argTypes = new List<TypeRef>();
+                }
+
+                // Pad/truncate to the wire count so the round-tripped call keeps
+                // its operand arity even if the stored signature is incomplete.
+                while (argTypes.Count < count) argTypes.Add(new TypeRef("?"));
+                if (argTypes.Count > count) argTypes = argTypes.GetRange(0, count);
+
+                // Constructors always return void; the stored signature index is
+                // sometimes the method name itself, so force void for ctors.
+                if (IsConstructorName(method))
+                {
+                    returnType = TypeRef.Void;
+                }
+                else
+                {
+                    var sig = best.SignatureIndex < _mod.StringPool.Count ? S(best.SignatureIndex) : "";
+                    returnType = string.IsNullOrEmpty(sig) ? TypeRef.Void : new TypeRef(sig);
+                }
+                return argTypes;
+            }
+        }
+
+        // The callee isn't declared in this module (a native/CLR-import call
+        // such as Array.Copy, Delegate.Invoke, Convert.ToString, IO.Println).
+        // Fall back to C# reflection on the host type, which knows the real
+        // parameter types even though the wire format doesn't.
+        if (TryResolveViaReflection(declaring, method, count, out var reflected, out returnType))
+            return reflected;
+
+        returnType = TypeRef.Void;
+        return Enumerable.Repeat(new TypeRef("?"), count).ToList();
+    }
+
+    /// <summary>
+    /// Resolves a native/CLR-import call's parameter types by reflecting over
+    /// the host CLR type. This recovers the real signatures (e.g.
+    /// <c>Array.Copy(Array, int, Array, int, int)</c>) that the ORBT wire
+    /// format doesn't carry. Returns false when the type can't be located, so
+    /// the caller keeps the placeholder.
+    /// </summary>
+    private static bool TryResolveViaReflection(
+        string declaring, string method, int count, out List<TypeRef> argTypes, out TypeRef returnType)
+    {
+        argTypes = new List<TypeRef>();
+        returnType = TypeRef.Void;
+        try
+        {
+            var type = ResolveHostType(declaring);
+            if (type == null) return false;
+
+            // Delegate.Invoke only exists on concrete delegate types, not on
+            // System.Delegate itself, so reflect can't find it — but its wire
+            // shape is always a single object argument.
+            if (type == typeof(Delegate) && method.TrimStart('.') == "Invoke")
+            {
+                argTypes = new List<TypeRef> { new TypeRef("object") };
+                returnType = TypeRef.Void;
+                return true;
+            }
+
+            ParameterInfo[]? parameters = null;
+            Type? ret = null;
+            if (IsConstructorName(method))
+            {
+                var ctor = type.GetConstructors()
+                    .OrderByDescending(c => c.GetParameters().Length)
+                    .FirstOrDefault(c => c.GetParameters().Length == count)
+                           ?? type.GetConstructors().OrderByDescending(c => c.GetParameters().Length).FirstOrDefault();
+                if (ctor != null) { parameters = ctor.GetParameters(); ret = null; }
+            }
+            else
+            {
+                var name = method.TrimStart('.');
+                var match = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
+                                           | BindingFlags.Static | BindingFlags.Instance)
+                    .Where(m => m.Name == name)
+                    .OrderByDescending(m => m.GetParameters().Length)
+                    .FirstOrDefault(m => m.GetParameters().Length == count)
+                           ?? type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
+                                           | BindingFlags.Static | BindingFlags.Instance)
+                                  .Where(m => m.Name == name).FirstOrDefault();
+                if (match != null) { parameters = match.GetParameters(); ret = match.ReturnType; }
+            }
+
+            if (parameters == null) return false;
+            argTypes = parameters.Select(p => new TypeRef(ClrTypeToWireName(p.ParameterType))).ToList();
+            returnType = ret == null ? TypeRef.Void : new TypeRef(ClrTypeToWireName(ret));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Maps a short/qualified callee type name to its CLR Type.</summary>
+    private static Type? ResolveHostType(string declaring)
+    {
+        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Array"] = "System.Array",
+            ["Convert"] = "System.Convert",
+            ["Delegate"] = "System.Delegate",
+            ["Math"] = "System.Math",
+            ["Console"] = "System.Console",
+            ["String"] = "System.String",
+            ["Object"] = "System.Object",
+            ["Environment"] = "System.Environment",
+            ["IO"] = "ObjektRT.Stdlib.System.IO",
+            ["File"] = "System.IO.File",
+            ["Directory"] = "System.IO.Directory",
+        };
+        if (aliases.TryGetValue(declaring, out var full))
+            declaring = full;
+
+        return Type.GetType(declaring)
+            ?? Type.GetType(declaring + ", System.Runtime")
+            ?? Type.GetType(declaring + ", System.Private.CoreLib")
+            ?? Type.GetType(declaring + ", mscorlib")
+            ?? Type.GetType(declaring + ", ObjektRT.Stdlib");
+    }
+
+    /// <summary>Maps a CLR <see cref="Type"/> to its ObjektIR wire type name.</summary>
+    private static string ClrTypeToWireName(Type t)
+    {
+        if (t == typeof(int) || t == typeof(uint)) return "int32";
+        if (t == typeof(long) || t == typeof(ulong)) return "int64";
+        if (t == typeof(short) || t == typeof(ushort)) return "int16";
+        if (t == typeof(byte) || t == typeof(sbyte)) return "uint8";
+        if (t == typeof(bool)) return "bool";
+        if (t == typeof(string)) return "string";
+        if (t == typeof(double)) return "float64";
+        if (t == typeof(float)) return "float32";
+        if (t == typeof(void)) return "void";
+        if (t == typeof(object)) return "object";
+        if (t.IsByRef || t.IsArray) return "object";   // type-erased at the wire
+        if (t == typeof(Array) || t == typeof(Delegate)) return "object";
+        if (t.IsGenericParameter) return t.Name;        // T, V, E, …
+        return (t.FullName ?? t.Name).Replace('+', '.');
     }
 
     /// <summary>
@@ -425,6 +700,7 @@ public sealed class ModelToAstConverter
             case Opcode.And: ast = OpCode.And; return true;
             case Opcode.Xor: ast = OpCode.Xor; return true;
             case Opcode.Or: ast = OpCode.Or; return true;
+            case Opcode.Shl: ast = OpCode.Shl; return true;
             case Opcode.Br: ast = OpCode.Br; return true;
             case Opcode.Brtrue: ast = OpCode.Brtrue; return true;
             case Opcode.Brfalse: ast = OpCode.Brfalse; return true;

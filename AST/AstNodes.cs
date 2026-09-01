@@ -98,15 +98,29 @@ public sealed record GenericParameterNode(string Name) : AstNode;
 /// <summary>
 /// An annotation/attribute applied to a type or member. Matches the wire
 /// model's <c>AttributeRecord</c>: a name plus ordered positional arguments
-/// stored as text (string arguments retain their quotes).
+/// stored as text (string arguments retain their quotes). Named arguments
+/// are stored in <see cref="NamedArguments"/> and encoded as <c>@Key=Value</c>
+/// in the string pool for wire storage.
 /// </summary>
 public sealed record AttributeNode(string Name) : AstNode
 {
     public List<string> Arguments { get; } = new();
+    public Dictionary<string, string> NamedArguments { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public AttributeNode(string name, IEnumerable<string> arguments) : this(name)
     {
         Arguments.AddRange(arguments);
+    }
+
+    /// <summary>
+    /// Returns all arguments (positional + encoded named) in the order they
+    /// should appear in the string pool: positional first, then named as
+    /// <c>@Key=Value</c>.
+    /// </summary>
+    public IEnumerable<string> AllEncodedArguments()
+    {
+        foreach (var a in Arguments) yield return a;
+        foreach (var kv in NamedArguments) yield return $"@{kv.Key}={kv.Value}";
     }
 }
 

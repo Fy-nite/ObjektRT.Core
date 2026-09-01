@@ -575,7 +575,7 @@ public sealed class AstToModelConverter
 
     /// <summary>
     /// Maps an AST opcode to its ORBT wire opcode, or <c>false</c> when the
-    /// AST opcode has no wire encoding (e.g. <c>Shl</c>, <c>Beq</c>, <c>Box</c>,
+    /// AST opcode has no wire encoding (e.g. <c>Beq</c>, <c>Box</c>,
     /// <c>For</c>, <c>Switch</c>).
     /// </summary>
     public static bool TryGetWireOpcode(OpCode ast, out Opcode wire)
@@ -633,6 +633,7 @@ public sealed class AstToModelConverter
             case OpCode.And: wire = Opcode.And; return true;
             case OpCode.Xor: wire = Opcode.Xor; return true;
             case OpCode.Or: wire = Opcode.Or; return true;
+            case OpCode.Shl: wire = Opcode.Shl; return true;
             case OpCode.Br: wire = Opcode.Br; return true;
             case OpCode.Brtrue: wire = Opcode.Brtrue; return true;
             case OpCode.Brfalse: wire = Opcode.Brfalse; return true;

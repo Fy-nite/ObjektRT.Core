@@ -187,7 +187,7 @@ var unmappedAst = Enum.GetValues<OpCode>()
     .Where(a => !AstToModelConverter.TryGetWireOpcode(a, out _))
     .Select(a => a.ToString())
     .ToList();
-var expectedUnmapped = new HashSet<string> { "Ldlen", "Shl", "Shr", "CgtUn", "CgeUn", "Beq", "Bne", "Bgt", "Blt", "Calli", "Box", "Unbox", "ConvI4", "ConvI8", "ConvR4", "ConvR8", "ConvU4", "ConvU8", "For", "Switch" };
+var expectedUnmapped = new HashSet<string> { "Ldlen", "Shr", "CgtUn", "CgeUn", "Beq", "Bne", "Bgt", "Blt", "Calli", "Box", "Unbox", "ConvI4", "ConvI8", "ConvR4", "ConvR8", "ConvU4", "ConvU8", "For", "Switch" };
 var extraUnmapped = unmappedAst.Where(a => !expectedUnmapped.Contains(a)).ToList();
 Check(extraUnmapped.Count == 0,
     "AST opcodes without wire encoding match the documented set",
