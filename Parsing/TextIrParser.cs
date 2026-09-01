@@ -724,14 +724,19 @@ public static class TextIrParser
 
     private static Instruction ParseInstruction(string line)
     {
+        if (line.StartsWith("callnative ", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseCallCore(line["callnative ".Length..].Trim().AsSpan(), isVirtual: false, isNative: true);
+        }
+
         if (line.StartsWith("callvirt ", StringComparison.OrdinalIgnoreCase))
         {
-            return ParseCallCore(line.Substring("callvirt ".Length).AsSpan().Trim(), isVirtual: true);
+            return ParseCallCore(line["callvirt ".Length..].Trim().AsSpan(), isVirtual: true, isNative: false);
         }
 
         if (line.StartsWith("call ", StringComparison.OrdinalIgnoreCase))
         {
-            return ParseCallCore(line.Substring("call ".Length).AsSpan().Trim(), isVirtual: false);
+            return ParseCallCore(line["call ".Length..].Trim().AsSpan(), isVirtual: false, isNative: false);
         }
 
         if (line.StartsWith("newobj ", StringComparison.OrdinalIgnoreCase))
@@ -745,7 +750,7 @@ public static class TextIrParser
         return new SimpleInstruction(OpCodeConverter.Parse(opcode), operand);
     }
 
-    private static CallInstruction ParseCallCore(ReadOnlySpan<char> span, bool isVirtual)
+    private static CallInstruction ParseCallCore(ReadOnlySpan<char> span, bool isVirtual, bool isNative = false)
     {
         var arrowIndex = span.IndexOf("->", StringComparison.Ordinal);
         if (arrowIndex < 0)
@@ -769,7 +774,7 @@ public static class TextIrParser
             ParameterTypes = args.ToList()
         };
 
-        return new CallInstruction(updatedMethodRef, args, isVirtual);
+        return new CallInstruction(updatedMethodRef, args, isVirtual, isNative);
     }
 
     private static NewObjInstruction ParseNewObj(string text)

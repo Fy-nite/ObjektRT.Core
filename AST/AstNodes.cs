@@ -305,7 +305,8 @@ public sealed record FieldReference(
 public sealed record CallInstruction(
     MethodReference Target,
     IReadOnlyList<TypeRef> Arguments,
-    bool IsVirtual
+    bool IsVirtual,
+    bool IsNative = false
 ) : Instruction;
 
 public sealed record NewObjInstruction(

@@ -553,7 +553,10 @@ public sealed class AstToModelConverter
 
     private void EmitCall(CallInstruction call)
     {
-        EmitOpcode(call.IsVirtual ? Opcode.Callvirt : Opcode.Call);
+        // IsNative: a `callnative` that bypasses the module function table and
+        // goes straight to the runtime's native resolver chain (used for host
+        // bindings reached via the `host.` keyword inside shadow contracts).
+        EmitOpcode(call.IsNative && !call.IsVirtual ? Opcode.NativeCall : (call.IsVirtual ? Opcode.Callvirt : Opcode.Call));
         EmitU16(Intern(MethodDisplayName(call.Target)));
         EmitU16((ushort)call.Arguments.Count);
     }

@@ -306,7 +306,7 @@ public sealed class ModuleSerializer
         return inst switch
         {
             SimpleInstruction si => si.Operand != null ? $"{OpCodeConverter.ToString(si.OpCode)} {si.Operand}" : OpCodeConverter.ToString(si.OpCode),
-            CallInstruction ci => $"{(ci.IsVirtual ? "callvirt" : "call")} {ci.Target.DeclaringType.Name}.{ci.Target.Name}({string.Join(", ", ci.Target.ParameterTypes.Select(p => p.Name))}) -> {ci.Target.ReturnType.Name}",
+            CallInstruction ci => $"{(ci.IsNative ? "callnative" : (ci.IsVirtual ? "callvirt" : "call"))} {ci.Target.DeclaringType.Name}.{ci.Target.Name}({string.Join(", ", ci.Target.ParameterTypes.Select(p => p.Name))}) -> {ci.Target.ReturnType.Name}",
             NewObjInstruction noi => $"newobj {noi.Type.Name}.constructor({string.Join(", ", noi.Constructor?.ParameterTypes.Select(p => p.Name) ?? Array.Empty<string>())})",
             _ => inst.ToString() ?? inst.GetType().Name
         };

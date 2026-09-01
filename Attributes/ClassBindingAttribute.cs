@@ -13,3 +13,10 @@ public class MethodBindingAttribute : Attribute
     public string? Name { get; }
     public MethodBindingAttribute(string? name = null) => Name = name;
 }
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class FieldBindingAttribute : Attribute
+{
+    public string? Name { get; }
+    public FieldBindingAttribute(string? name = null) => Name = name;
+}

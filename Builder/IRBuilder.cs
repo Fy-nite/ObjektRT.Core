@@ -495,6 +495,13 @@ public sealed class InstructionBuilder
         return this;
     }
 
+    public InstructionBuilder Callnative(MethodReference method)
+    {
+        var instr = new CallInstruction(method, new List<TypeRef>(), false, true) { Location = _currentLocation };
+        _statements.Add(new InstructionStatement(instr) { Location = _currentLocation });
+        return this;
+    }
+
     // Object operations
     public InstructionBuilder Ldelem() => Emit(OpCode.Ldelem);
     public InstructionBuilder Stelem() => Emit(OpCode.Stelem);
