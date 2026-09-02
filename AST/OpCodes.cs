@@ -98,7 +98,21 @@ public enum OpCode
     Try,
     Break,
     Continue,
-    Throw
+    Throw,
+
+    // Pointer operations
+    Ldptr,
+    LdptrI8,
+    LdptrR4,
+    LdptrR8,
+    StptrI4,
+    StptrI8,
+    StptrR4,
+    StptrR8,
+    PtrAddr,
+    PtrLen,
+    PtrAlloc,
+    PtrFree,
 }
 
 public static class OpCodeConverter
@@ -174,13 +188,27 @@ public static class OpCodeConverter
         ["break"] = OpCode.Break,
         ["continue"] = OpCode.Continue,
         ["throw"] = OpCode.Throw,
+        ["ldptr"] = OpCode.Ldptr,
+        ["ldptr.i4"] = OpCode.Ldptr,
+        ["ldptr.i8"] = OpCode.LdptrI8,
+        ["ldptr.r4"] = OpCode.LdptrR4,
+        ["ldptr.r8"] = OpCode.LdptrR8,
+        ["stptr.i4"] = OpCode.StptrI4,
+        ["stptr.i8"] = OpCode.StptrI8,
+        ["stptr.r4"] = OpCode.StptrR4,
+        ["stptr.r8"] = OpCode.StptrR8,
+        ["ptr.addr"] = OpCode.PtrAddr,
+        ["ptr.len"] = OpCode.PtrLen,
+        ["ptr.alloc"] = OpCode.PtrAlloc,
+        ["ptr.free"] = OpCode.PtrFree,
     };
 
     public static bool TryParse(string? s, out OpCode result) => _map.TryGetValue(s ?? "", out result);
 
     public static OpCode Parse(string s) => TryParse(s, out var r) ? r : throw new ArgumentException($"Unknown opcode '{s}'");
 
-    private static readonly Dictionary<OpCode, string> _reverseMap = _map.ToDictionary(kv => kv.Value, kv => kv.Key);
+    private static readonly Dictionary<OpCode, string> _reverseMap =
+        _map.GroupBy(kv => kv.Value).ToDictionary(g => g.Key, g => g.First().Key);
 
     public static string ToString(OpCode opcode) => _reverseMap.TryGetValue(opcode, out var s) ? s : opcode.ToString().ToLowerInvariant();
 }

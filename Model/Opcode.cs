@@ -63,6 +63,23 @@ public enum Opcode : ushort
     NativeCall = 0x35,
     Ldlen     = 0x36,
     Shl       = 0x37,
+    // ── Pointer operations (0x38+) ──────────────────────────────
+    // Typed indirection over a managed pointer block (see ManagedPtr).
+    // Each LoadPtr.* pops a pointer handle (Obj-tag external) and pushes the
+    // dereferenced value read through it, bound-checked against the block.
+    Ldptr = 0x38,   // Ldptr.i4   (32-bit int / bool / char)
+    LdptrI8 = 0x39, // Ldptr.i8
+    LdptrR4 = 0x3A, // Ldptr.r4
+    LdptrR8 = 0x3B, // Ldptr.r8
+    // Typed store: pops value then pointer handle; writes the value through it.
+    StptrI4 = 0x3C,
+    StptrI8 = 0x3D,
+    StptrR4 = 0x3E,
+    StptrR8 = 0x3F,
+    PtrAddr = 0x40, // Ptr.addr: pops a pointer handle, pushes raw address as I8
+    PtrLen  = 0x41, // Ptr.len:  pops a pointer handle, pushes element count as I4
+    PtrAlloc = 0x42,// Ptr.alloc: pops count,size -> creates a PtrBlock, pushes handle
+    PtrFree  = 0x43,// Ptr.free:  pops a pointer handle, releases its buffer
 }
 
 public static class OpcodeExtensions
@@ -125,6 +142,18 @@ public static class OpcodeExtensions
         Opcode.Brtrue    => "brtrue",
         Opcode.Brfalse   => "brfalse",
         Opcode.NativeCall => "callnative",
+        Opcode.Ldptr    => "ldptr.i4",
+        Opcode.LdptrI8  => "ldptr.i8",
+        Opcode.LdptrR4  => "ldptr.r4",
+        Opcode.LdptrR8  => "ldptr.r8",
+        Opcode.StptrI4  => "stptr.i4",
+        Opcode.StptrI8  => "stptr.i8",
+        Opcode.StptrR4  => "stptr.r4",
+        Opcode.StptrR8  => "stptr.r8",
+        Opcode.PtrAddr  => "ptr.addr",
+        Opcode.PtrLen   => "ptr.len",
+        Opcode.PtrAlloc => "ptr.alloc",
+        Opcode.PtrFree  => "ptr.free",
         _                => "???",
     };
 
@@ -150,9 +179,21 @@ public static class OpcodeExtensions
             "stfld"     => 0x2A, "ldc.i4"    => 0x2B, "ldc.i8"    => 0x2C,
             "ldc.r4"    => 0x2D, "ldc.r8"    => 0x2E, "and"       => 0x2F,
             "xor"       => 0x30, "or"        => 0x31, "br"        => 0x32,
-            "brtrue"    => 0x33, "brfalse"   => 0x34, "callnative" => 0x35,
+            "brtrue"    => 0x33, "brfalse"   => 0x34,             "callnative" => 0x35,
             "ldlen"     => 0x36,
             "shl"       => 0x37,
+            "ldptr"     => 0x38, "ldptr.i4"  => 0x38, "ldind.i4" => 0x38,
+            "ldptr.i8"  => 0x39, "ldind.i8"  => 0x39,
+            "ldptr.r4"  => 0x3A, "ldind.r4"  => 0x3A,
+            "ldptr.r8"  => 0x3B, "ldind.r8"  => 0x3B,
+            "stptr.i4"  => 0x3C, "stind.i4"  => 0x3C,
+            "stptr.i8"  => 0x3D, "stind.i8"  => 0x3D,
+            "stptr.r4"  => 0x3E, "stind.r4"  => 0x3E,
+            "stptr.r8"  => 0x3F, "stind.r8"  => 0x3F,
+            "ptr.addr"  => 0x40,
+            "ptr.len"   => 0x41,
+            "ptr.alloc" => 0x42,
+            "ptr.free"  => 0x43,
             _           => -1,
         };
     }

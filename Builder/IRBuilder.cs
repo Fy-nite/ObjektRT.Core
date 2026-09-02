@@ -507,6 +507,24 @@ public sealed class InstructionBuilder
     public InstructionBuilder Stelem() => Emit(OpCode.Stelem);
     public InstructionBuilder Ldlen() => Emit(OpCode.Ldlen);
 
+    // ── Pointer operations ─────────────────────────────────────────
+    public InstructionBuilder Ldptr() => Emit(OpCode.Ldptr);
+    public InstructionBuilder LdptrI8() => Emit(OpCode.LdptrI8);
+    public InstructionBuilder LdptrR4() => Emit(OpCode.LdptrR4);
+    public InstructionBuilder LdptrR8() => Emit(OpCode.LdptrR8);
+    public InstructionBuilder StptrI4() => Emit(OpCode.StptrI4);
+    public InstructionBuilder StptrI8() => Emit(OpCode.StptrI8);
+    public InstructionBuilder StptrR4() => Emit(OpCode.StptrR4);
+    public InstructionBuilder StptrR8() => Emit(OpCode.StptrR8);
+    public InstructionBuilder PtrAddr() => Emit(OpCode.PtrAddr);
+    public InstructionBuilder PtrLen() => Emit(OpCode.PtrLen);
+    public InstructionBuilder PtrAlloc() => Emit(OpCode.PtrAlloc);
+    public InstructionBuilder PtrFree() => Emit(OpCode.PtrFree);
+
+    /// <summary>Emits a raw single opcode with an optional raw operand. Used by
+    /// the inline <c>IL { ... }</c> block so users can call any instruction.</summary>
+    public InstructionBuilder EmitRaw(OpCode opCode, string? operand = null) => Emit(opCode, operand);
+
     public InstructionBuilder Newarr(TypeRef elementType)
     {
         var instr = new SimpleInstruction(OpCode.Newarr, elementType.Name) { Location = _currentLocation };

@@ -640,6 +640,18 @@ public sealed class AstToModelConverter
             case OpCode.Br: wire = Opcode.Br; return true;
             case OpCode.Brtrue: wire = Opcode.Brtrue; return true;
             case OpCode.Brfalse: wire = Opcode.Brfalse; return true;
+            case OpCode.Ldptr: wire = Opcode.Ldptr; return true;
+            case OpCode.LdptrI8: wire = Opcode.LdptrI8; return true;
+            case OpCode.LdptrR4: wire = Opcode.LdptrR4; return true;
+            case OpCode.LdptrR8: wire = Opcode.LdptrR8; return true;
+            case OpCode.StptrI4: wire = Opcode.StptrI4; return true;
+            case OpCode.StptrI8: wire = Opcode.StptrI8; return true;
+            case OpCode.StptrR4: wire = Opcode.StptrR4; return true;
+            case OpCode.StptrR8: wire = Opcode.StptrR8; return true;
+            case OpCode.PtrAddr: wire = Opcode.PtrAddr; return true;
+            case OpCode.PtrLen: wire = Opcode.PtrLen; return true;
+            case OpCode.PtrAlloc: wire = Opcode.PtrAlloc; return true;
+            case OpCode.PtrFree: wire = Opcode.PtrFree; return true;
             default: wire = default; return false;
         }
     }

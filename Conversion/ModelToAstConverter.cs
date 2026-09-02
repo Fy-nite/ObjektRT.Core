@@ -423,7 +423,7 @@ public sealed class ModelToAstConverter
     {
         "int", "string", "bool", "double", "float", "object", "int64", "long", "null", "void",
         "byte", "sbyte", "short", "ushort", "uint", "int32", "float32", "float64",
-        "uint8", "int8", "int16", "uint16", "uint32", "intptr",
+        "uint8", "int8", "int16", "uint16", "uint32", "intptr", "uintptr", "nuint",
     };
 
     private static (string Declaring, string Name) SplitQualified(string name)
@@ -704,6 +704,18 @@ public sealed class ModelToAstConverter
             case Opcode.Br: ast = OpCode.Br; return true;
             case Opcode.Brtrue: ast = OpCode.Brtrue; return true;
             case Opcode.Brfalse: ast = OpCode.Brfalse; return true;
+            case Opcode.Ldptr: ast = OpCode.Ldptr; return true;
+            case Opcode.LdptrI8: ast = OpCode.LdptrI8; return true;
+            case Opcode.LdptrR4: ast = OpCode.LdptrR4; return true;
+            case Opcode.LdptrR8: ast = OpCode.LdptrR8; return true;
+            case Opcode.StptrI4: ast = OpCode.StptrI4; return true;
+            case Opcode.StptrI8: ast = OpCode.StptrI8; return true;
+            case Opcode.StptrR4: ast = OpCode.StptrR4; return true;
+            case Opcode.StptrR8: ast = OpCode.StptrR8; return true;
+            case Opcode.PtrAddr: ast = OpCode.PtrAddr; return true;
+            case Opcode.PtrLen: ast = OpCode.PtrLen; return true;
+            case Opcode.PtrAlloc: ast = OpCode.PtrAlloc; return true;
+            case Opcode.PtrFree: ast = OpCode.PtrFree; return true;
             default: ast = default; return false;
         }
     }
