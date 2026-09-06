@@ -97,8 +97,8 @@ public class ObjectILTokenizer
 
     public bool Eof => _pos >= _input.Length && !_hasLookahead;
 
-    private static bool IsIdentStart(char c) => char.IsLetter(c) || c == '_' || c == '`';
-    private static bool IsIdentCont(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '`' || c == '.' || c == '<' || c == '>';
+    private static bool IsIdentStart(char c) => char.IsLetter(c) || c == '_' || c == '`' || c == '?';
+    private static bool IsIdentCont(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '`' || c == '.' || c == '<' || c == '>' || c == '?';
 
     private void SkipWhitespaceAndComments()
     {

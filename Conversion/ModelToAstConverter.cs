@@ -296,14 +296,18 @@ public sealed class ModelToAstConverter
                 return false;
             thenBlock = new BlockStatement(ReconstructRange(instructions, i + 1, brIndex));
             elseBlock = new BlockStatement(ReconstructRange(instructions, brIndex + 1, endIdx));
-            consumed = endIdx + 1 - i;
+            // The end label is the first instruction AFTER the if/else; keep it
+            // for the flat continuation instead of consuming it with the if.
+            consumed = endIdx - i;
         }
         else
         {
             // No else: the else label is the end of the then-block.
             thenBlock = new BlockStatement(ReconstructRange(instructions, i + 1, elseIdx));
             elseBlock = null!;
-            consumed = elseIdx + 1 - i;
+            // Else label is the first instruction after the if; keep it for the
+            // flat continuation instead of consuming it with the if.
+            consumed = elseIdx - i;
         }
 
         stmt = new IfStatement("stack", thenBlock, elseBlock);
@@ -734,7 +738,7 @@ public sealed class ModelToAstConverter
         OperandI8 i8 => i8.Value.ToString(CultureInfo.InvariantCulture),
         OperandR4 r4 => r4.Value.ToString("R", CultureInfo.InvariantCulture),
         OperandR8 r8 => r8.Value.ToString("R", CultureInfo.InvariantCulture),
-        OperandString s => _mod.Resolve(s.StringIndex),
+        OperandString s => $"\"{_mod.Resolve(s.StringIndex).Replace("\\", "\\\\").Replace("\"", "\\\"")}\"",
         OperandIndex ix => ix.Index.ToString(CultureInfo.InvariantCulture),
         OperandFieldRef f => _mod.Resolve(f.StringIndex),
         OperandMethodRef m => _mod.Resolve(m.StringIndex),
